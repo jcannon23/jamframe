@@ -12,6 +12,7 @@ Rooms and everything else adjustable are edited at http://<this-computer>:8765/s
 Usage: python watch.py
 """
 import hashlib
+import html
 import re
 import json
 import os
@@ -212,22 +213,37 @@ def find_weather(wanted):
 _covers = {}     # (artist, title) -> (cover URL or None, when asked)
 
 
-def find_cover(artist, title):
-    """A cover for a song that arrived without one, as AirPlay from a phone does: Deezer's, found by name
-    (it is sent the song and artist names). None when it has no match; asked again after ten minutes."""
-    key = (artist, title)
+def find_cover(artist, title, album=""):
+    """A sharp cover for a song that arrived without one, or with a small one, as radio does: Deezer's, found
+    by name (it is sent the song, artist and album names). None when it has no match; asked again after ten minutes."""
+    key = (artist, title, album)
     if key not in _covers or (not _covers[key][0] and time.time() - _covers[key][1] > 600):
         try:
-            hit = tempo.search(artist, title)
+            hit = tempo.search(artist, title, album)
             _covers[key] = ((hit.get("album") or {}).get("cover_xl") if hit else None, time.time())
         except (OSError, ValueError):
             _covers[key] = (None, time.time())
     return _covers[key][0]
 
 
+RADIO = ("x-sonosapi-hls:", "x-sonosapi-stream:", "x-sonosapi-radio:", "x-rincon-mp3radio:")   # SiriusXM is the first
+_stations = {}   # stream URI -> (station name, its logo URL)
+art_in = lambda didl: html.unescape((re.search(r"<upnp:albumArtURI>([^<]+)<", didl or "") or [None, ""])[1])
+
+
+def station(player, uri):
+    """(name, logo URL) of the radio station a player is tuned to, e.g. ("CH 25 - Classic Rewind", "https://...")."""
+    if uri not in _stations:
+        meta = player.avTransport.GetMediaInfo([("InstanceID", 0)]).get("CurrentURIMetaData") or ""
+        name = html.unescape((re.search(r"<dc:title>([^<]+)<", meta) or [None, ""])[1])
+        _stations[uri] = (name, art_in(meta))
+    return _stations[uri]
+
+
 def now_playing(room, ignore=()):
-    """(cover URL, {title, artist, album}, seconds in, length) if the room is playing music, else None.
-    Seconds in and length are None when the source does not say (AirPlay, radio).
+    """(cover URL, {title, artist, album}, seconds in, length, station) if the room is playing music, else None.
+    Seconds in and length are None when the source does not say (AirPlay, radio); station is the radio
+    station's name, None for anything else.
     ignore: names from SOURCES that do not count as music."""
     player = room.group.coordinator if room.group else room
     if player.get_current_transport_info()["current_transport_state"] != "PLAYING":
@@ -237,11 +253,16 @@ def now_playing(room, ignore=()):
     if track.get("uri", "").startswith(skip):
         return None
     info = {k: track.get(k) or "" for k in ("title", "artist", "album")}
-    art = track.get("album_art") or (info["title"] and find_cover(info["artist"], info["title"]))
+    on_air = station(player, track["uri"]) if track.get("uri", "").startswith(RADIO) else None
+    # Best picture first: what Sonos has; else a sharp cover found by the song's name; else the one the station
+    # sent with the song (small); else the station's logo, as during talk and adverts.
+    art = (track.get("album_art") or (info["title"] and find_cover(info["artist"], info["title"], info["album"]))
+           or art_in(track.get("metadata")) or (on_air and on_air[1]))
     if not art:
         return None
-    length = seconds(track.get("duration"))
-    return art, info, seconds(track.get("position")) if length else None, length or None
+    length, at = seconds(track.get("duration")), seconds(track.get("position"))
+    # radio gives no length but does count from the start of each song; all zeros means the source says nothing
+    return art, info, at if length or at else None, length or None, on_air and on_air[0] or None
 
 
 class Room:
@@ -278,7 +299,7 @@ class Room:
             if song != self.song:        # looked up once per song, found or not
                 self.song = song
                 self.display.lyrics = find_lyrics(song, playing[3]) if song and song["title"] else None
-            self.display.duration, self.display.extra = playing[3], {}
+            self.display.duration, self.display.extra = playing[3], {"source": playing[4]}     # the station, on radio
             if spot and spot["playing"] and spot["title"].strip().lower() == playing[1]["title"].strip().lower():
                 # the same song: Spotify knows where it is to the millisecond, and what comes after
                 self.display.position = (spot["progress"], spot["at"])

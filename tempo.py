@@ -61,11 +61,13 @@ def decode(mp3):
             return array.array("h", w.readframes(w.getnframes()))
 
 
-def search(artist, title):
-    """Deezer's best match for a song (its search record), or None. Exact names first, then loosely."""
+def search(artist, title, album=""):
+    """Deezer's best match for a song (its search record), or None. On the named album if it can, then by
+    exact names, then loosely."""
     import requests
     ask = lambda q: requests.get("https://api.deezer.com/search", timeout=6, params={"q": q, "limit": 1}).json().get("data")
-    found = ask('artist:"%s" track:"%s"' % (artist, title)) or ask(("%s %s" % (artist, title)).strip())
+    exact = 'artist:"%s" track:"%s"' % (artist, title)
+    found = (album and ask('%s album:"%s"' % (exact, album))) or ask(exact) or ask(("%s %s" % (artist, title)).strip())
     return found[0] if found else None
 
 

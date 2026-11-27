@@ -22,6 +22,8 @@ like the rest of the art on the wall. When the music stops, the TV goes back to 
   tempo. In Grooves the mat becomes a record that spins up when a song starts and winds down when it stops.
 - **Knows more with Spotify connected** (optional). Lyrics land on the line, the next song shows as this one
   ends, the caption can name the playlist and mark liked songs, and the settings page gets skip, pause and like.
+- **Works with SiriusXM and other radio.** The song's own cover rather than the channel logo, with the channel
+  named in the caption (tick Playlist under Caption). The logo shows during talk and adverts.
 - **Works with AirPlay.** Music sent from a phone to a Sonos speaker arrives without a cover; JamFrame finds
   one by the song's name and keeps its own time for lyrics and waves.
 - **Fits the screen it's on.** A TV, a tablet on a shelf or a phone standing upright: the cover, mat, caption

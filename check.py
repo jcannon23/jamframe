@@ -269,11 +269,11 @@ real_now = watch.now_playing
 room = watch.Room("Den", None, lambda url: b"jpeg")
 room.speaker = object()
 conf = settings(path)
-watch.now_playing = lambda *a: ("http://a/9", {"title": "one ", "artist": "A", "album": "B"}, 61, 200)
+watch.now_playing = lambda *a: ("http://a/9", {"title": "one ", "artist": "A", "album": "B"}, 61, 200, None)
 room.tick(conf, sp.now)
 st = room.display.page_state()
 assert st["next"] == {"title": "Two", "artist": "B"} and st["source"] == "Sunday Morning" and 61.4 < st["position"] < 63
-watch.now_playing = lambda *a: ("http://a/9", {"title": "Other", "artist": "A", "album": "B"}, 5, 200)
+watch.now_playing = lambda *a: ("http://a/9", {"title": "Other", "artist": "A", "album": "B"}, 5, 200, None)
 room.tick(conf, sp.now)
 assert room.display.page_state()["next"] is None and room.display.page_state()["position"] < 10
 watch.now_playing = real_now
@@ -288,12 +288,12 @@ class Speaker:
     def get_current_track_info(self):
         return self.track
 looked = []
-watch.find_cover = lambda artist, title: looked.append((artist, title)) or ("http://covers/" + title if title == "Known" else None)
+watch.find_cover = lambda artist, title, album="": looked.append((artist, title)) or ("http://covers/" + title if title == "Known" else None)
 air = {"uri": "x-sonos-vli:RINCON_1:1,airplay:abc", "title": "Known", "artist": "A", "album": "", "album_art": "",
        "position": "0:00:00", "duration": "0:00:00"}
-assert watch.now_playing(Speaker(air)) == ("http://covers/Known", {"title": "Known", "artist": "A", "album": ""}, None, None)
+assert watch.now_playing(Speaker(air)) == ("http://covers/Known", {"title": "Known", "artist": "A", "album": ""}, None, None, None)
 assert watch.now_playing(Speaker(dict(air, title="Unknown"))) is None and watch.now_playing(Speaker(dict(air, title=""))) is None
-assert watch.now_playing(Speaker(dict(air, album_art="http://sonos/art", duration="0:03:20", position="0:01:00")))[0::2] == ("http://sonos/art", 60)
+assert watch.now_playing(Speaker(dict(air, album_art="http://sonos/art", duration="0:03:20", position="0:01:00")))[0::2] == ("http://sonos/art", 60, None)
 assert looked == [("A", "Known"), ("A", "Unknown")]
 room = watch.Room("Air", None, lambda url: b"jpeg")
 room.speaker = Speaker(air)
@@ -301,6 +301,23 @@ room.tick(conf)
 room.began = (room.began[0], room.began[1] - 30)        # as if the song began half a minute ago
 room.tick(conf)
 assert 29.5 < room.display.page_state()["position"] < 32 and room.display.page_state()["art"]
+
+# radio (SiriusXM): the station's name comes along; picture is the song's found cover, else the one sent with the
+# song, else the station's logo
+class Radio(Speaker):
+    class avTransport:
+        @staticmethod
+        def GetMediaInfo(args):
+            return {"CurrentURIMetaData": "<dc:title>CH 25 - Classic Rewind</dc:title><upnp:albumArtURI>http://logo/25.png?a=1&amp;b=2</upnp:albumArtURI>"}
+on = {"uri": "x-sonosapi-hls:channel-linear%3aabc?sid=37", "title": "Known", "artist": "A", "album": "B", "album_art": "",
+      "position": "0:00:23", "duration": "0:00:00", "metadata": "<upnp:albumArtURI>http://sxm/small_m.jpg</upnp:albumArtURI>"}
+assert watch.now_playing(Radio(on)) == ("http://covers/Known", {"title": "Known", "artist": "A", "album": "B"}, 23, None, "CH 25 - Classic Rewind")
+assert watch.now_playing(Radio(dict(on, title="Unknown")))[0] == "http://sxm/small_m.jpg"
+assert watch.now_playing(Radio(dict(on, title="", metadata="")))[0] == "http://logo/25.png?a=1&b=2"
+room = watch.Room("Radio", None, lambda url: b"jpeg")
+room.speaker = Radio(on)
+room.tick(conf)
+assert room.display.page_state()["source"] == "CH 25 - Classic Rewind"
 
 # over HTTP: status never carries the keys; controls and disconnect work, with the PIN that is set
 srv2 = serve({"Den": room.display}, port=0, path=path, spotify=sp)
