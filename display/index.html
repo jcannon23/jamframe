@@ -17,6 +17,11 @@
   #title { font-size: 2.3em; }
   #by { font-size: 1.6em; margin-top: 0.4em; font-style: italic; opacity: 0.8; }
   #src { font-size: 1.25em; margin-top: 0.55em; opacity: 0.6; letter-spacing: 0.04em; }
+  /* On radio: the station, in the other bottom corner. */
+  #station { position: fixed; bottom: calc(4.5 * var(--u)); left: calc(5.5 * var(--u)); max-width: 34vw; display: flex; align-items: center;
+             gap: calc(1.4 * var(--u)); opacity: 0; transition: opacity 2s, color 2s; font: calc(1.9 * var(--u)) "Iowan Old Style", Palatino, Georgia, serif; }
+  #station img { height: calc(7 * var(--u)); border-radius: calc(0.5 * var(--u)); filter: saturate(0.6) contrast(0.9); }   /* muted, like the cover */
+  #station img[hidden] { display: none; }
   /* The next song, from Spotify, in the bottom corner. */
   #next { position: fixed; bottom: calc(4.5 * var(--u)); right: calc(5.5 * var(--u)); max-width: 32vw; text-align: right; opacity: 0;
           transition: opacity 2s, color 2s; font-family: "Iowan Old Style", Palatino, Georgia, serif; }
@@ -64,6 +69,7 @@
 <canvas id="w"></canvas>
 <div id="cap"><div id="title"></div><div id="by"></div><div id="src"></div></div>
 <div id="next"><small>Up next</small><div></div></div>
+<div id="station"><img alt="" hidden><span></span></div>
 <div id="lyr"></div>
 <div id="clock"><div class="time"></div><div class="date"></div><div class="wx"></div></div>
 <div id="corner"><div class="time"></div><div class="wx"></div></div>
@@ -73,11 +79,11 @@
 // How it looks comes with the state too ("look", set on the settings page) and applies as it changes.
 const cv = document.getElementById('c'), g = cv.getContext('2d');
 const cap = document.getElementById('cap'), clock = document.getElementById('clock'), lyr = document.getElementById('lyr');
-const corner = document.getElementById('corner'), next = document.getElementById('next');
+const corner = document.getElementById('corner'), next = document.getElementById('next'), stationEl = document.getElementById('station');
 const MATS = { paper: [232, 226, 215], white: [240, 239, 235], charcoal: [46, 44, 41] }, SHADE = [60, 54, 46];
 const SIZES = { small: 0.8, medium: 1, large: 1.3 };
 let look = { caption: true, align: 'center', fields: ['title', 'artist', 'album'], size: 'medium', mute: 0.5,
-             mat: 'paper', cover: 0.62, grain: true, shift: false, idle: 'black', brightness: 1, lyrics: 'off', clock: 'classic', waves: 'off', wave_level: 0.6, wave_color: 'edges', upnext: 'off', scale: 1 };
+             mat: 'paper', cover: 0.62, grain: true, shift: false, idle: 'black', brightness: 1, lyrics: 'off', clock: 'classic', waves: 'off', wave_level: 0.6, wave_color: 'edges', upnext: 'off', station: 'logo', scale: 1 };
 let W, H, U, S, X, Y;       // canvas size, the unit sizes are worked out from (see --u), cover edge and position
 let ox = 0, oy = 0;         // burn-in shift, as a share of screen height
 
@@ -242,7 +248,7 @@ let played, stale = false;   // last "play it now" seen; look changed while a tr
 // What is up now, drawn still. Text takes a colour that reads on the mat behind it.
 function still() {
   frame(null, shown, 'fade', 1);
-  cap.style.color = clock.style.color = lyr.style.color = corner.style.color = next.style.color = ink(shown ? shown.mat : idleColor());
+  cap.style.color = clock.style.color = lyr.style.color = corner.style.color = next.style.color = stationEl.style.color = ink(shown ? shown.mat : idleColor());
   const halo = rgb(shown ? shown.mat : idleColor());                 // keeps waves from running through the caption
   cap.style.textShadow = look.waves === 'off' ? '' : `0 0 calc(0.6 * var(--u)) ${halo}, 0 0 calc(1.2 * var(--u)) ${halo}, 0 0 calc(2 * var(--u)) ${halo}`;
   lyr.style.opacity = shown ? 1 : 0;
@@ -360,6 +366,11 @@ function setLyrics() {
 function nextTick() {
   const n = wanted.next, near = wanted.duration && basePos !== null && wanted.duration - at() < 20;
   next.lastChild.textContent = n ? [n.title, n.artist].filter(Boolean).join(' \u2014 ') : '';
+  const st = wanted.station, img = stationEl.firstChild, logo = st && look.station === 'logo' && st.logo;
+  if (logo && img.getAttribute('src') !== logo) img.src = logo;
+  img.hidden = !logo;
+  stationEl.lastChild.textContent = st ? st.name : '';
+  stationEl.style.opacity = st && look.station !== 'off' && shown && !busy && wanted.art ? 0.85 : 0;
   next.style.opacity = n && shown && !busy && wanted.art && (look.upnext === 'always' || (look.upnext === 'end' && near)) ? 0.85 : 0;
 }
 

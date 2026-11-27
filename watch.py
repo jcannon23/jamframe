@@ -210,20 +210,24 @@ def find_weather(wanted):
     return now
 
 
-_covers = {}     # (artist, title) -> (cover URL or None, when asked)
+_covers = {}     # (artist, title, album) -> (cover URL or None, the album it is from, when asked)
 
 
-def find_cover(artist, title, album=""):
+def find_cover(artist, title, album="", sure=False):
     """A sharp cover for a song that arrived without one, or with a small one, as radio does: Deezer's, found
-    by name (it is sent the song, artist and album names). None when it has no match; asked again after ten minutes."""
+    by name (it is sent the song, artist and album names). None when it has no match; asked again after ten minutes.
+    sure: only a cover from the album named. Songs sit on many records, and a live album's cover is the wrong one."""
     key = (artist, title, album)
-    if key not in _covers or (not _covers[key][0] and time.time() - _covers[key][1] > 600):
+    if key not in _covers or (not _covers[key][0] and time.time() - _covers[key][2] > 600):
         try:
-            hit = tempo.search(artist, title, album)
-            _covers[key] = ((hit.get("album") or {}).get("cover_xl") if hit else None, time.time())
+            hit = tempo.search(artist, title, album) or {}
+            _covers[key] = ((hit.get("album") or {}).get("cover_xl"), (hit.get("album") or {}).get("title", ""), time.time())
         except (OSError, ValueError):
-            _covers[key] = (None, time.time())
-    return _covers[key][0]
+            _covers[key] = (None, "", time.time())
+    url, from_album = _covers[key][:2]
+    plain = lambda text: re.sub(r"[^a-z0-9]", "", text.lower())
+    same = album and from_album and (plain(album) in plain(from_album) or plain(from_album) in plain(album))
+    return url if url and (same or not sure) else None
 
 
 RADIO = ("x-sonosapi-hls:", "x-sonosapi-stream:", "x-sonosapi-radio:", "x-rincon-mp3radio:")   # SiriusXM is the first
@@ -243,7 +247,7 @@ def station(player, uri):
 def now_playing(room, ignore=()):
     """(cover URL, {title, artist, album}, seconds in, length, station) if the room is playing music, else None.
     Seconds in and length are None when the source does not say (AirPlay, radio); station is the radio
-    station's name, None for anything else.
+    station's (name, logo URL), None for anything else.
     ignore: names from SOURCES that do not count as music."""
     player = room.group.coordinator if room.group else room
     if player.get_current_transport_info()["current_transport_state"] != "PLAYING":
@@ -254,15 +258,17 @@ def now_playing(room, ignore=()):
         return None
     info = {k: track.get(k) or "" for k in ("title", "artist", "album")}
     on_air = station(player, track["uri"]) if track.get("uri", "").startswith(RADIO) else None
-    # Best picture first: what Sonos has; else a sharp cover found by the song's name; else the one the station
-    # sent with the song (small); else the station's logo, as during talk and adverts.
-    art = (track.get("album_art") or (info["title"] and find_cover(info["artist"], info["title"], info["album"]))
-           or art_in(track.get("metadata")) or (on_air and on_air[1]))
+    # Best picture first: what Sonos has; a sharp cover found by name, if it is from the right album; the one
+    # the station sent with the song (small, but right); any cover found by name; the station's logo, as during
+    # talk and adverts.
+    sent, named = art_in(track.get("metadata")), (info["artist"], info["title"], info["album"])
+    art = (track.get("album_art") or (info["title"] and sent and find_cover(*named, sure=True)) or sent
+           or (info["title"] and find_cover(*named)) or (on_air and on_air[1]))
     if not art:
         return None
     length, at = seconds(track.get("duration")), seconds(track.get("position"))
     # radio gives no length but does count from the start of each song; all zeros means the source says nothing
-    return art, info, at if length or at else None, length or None, on_air and on_air[0] or None
+    return art, info, at if length or at else None, length or None, on_air
 
 
 class Room:
@@ -299,7 +305,9 @@ class Room:
             if song != self.song:        # looked up once per song, found or not
                 self.song = song
                 self.display.lyrics = find_lyrics(song, playing[3]) if song and song["title"] else None
-            self.display.duration, self.display.extra = playing[3], {"source": playing[4]}     # the station, on radio
+            self.display.duration, self.display.extra = playing[3], {}
+            if playing[4]:               # on radio: the station is where the song comes from
+                self.display.extra = {"source": playing[4][0], "station": {"name": playing[4][0], "logo": playing[4][1]}}
             if spot and spot["playing"] and spot["title"].strip().lower() == playing[1]["title"].strip().lower():
                 # the same song: Spotify knows where it is to the millisecond, and what comes after
                 self.display.position = (spot["progress"], spot["at"])

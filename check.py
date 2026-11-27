@@ -287,8 +287,14 @@ class Speaker:
         return {"current_transport_state": "PLAYING"}
     def get_current_track_info(self):
         return self.track
+# a cover found by name counts as sure only when it is from the album named
+import tempo as _tempo
+_search, _tempo.search = _tempo.search, lambda *a: {"album": {"cover_xl": "http://dz/live.jpg", "title": "Live (Collector's Edition)"}}
+assert watch.find_cover("AC/DC", "Nite", "Back in Black", sure=True) is None and watch.find_cover("AC/DC", "Nite", "Back in Black") == "http://dz/live.jpg"
+assert watch.find_cover("AC/DC", "Thunderstruck", "Live", sure=True) == "http://dz/live.jpg"
+_tempo.search = _search
 looked = []
-watch.find_cover = lambda artist, title, album="": looked.append((artist, title)) or ("http://covers/" + title if title == "Known" else None)
+watch.find_cover = lambda artist, title, album="", sure=False: looked.append((artist, title)) or ("http://covers/" + title if title == "Known" else None)
 air = {"uri": "x-sonos-vli:RINCON_1:1,airplay:abc", "title": "Known", "artist": "A", "album": "", "album_art": "",
        "position": "0:00:00", "duration": "0:00:00"}
 assert watch.now_playing(Speaker(air)) == ("http://covers/Known", {"title": "Known", "artist": "A", "album": ""}, None, None, None)
@@ -311,13 +317,14 @@ class Radio(Speaker):
             return {"CurrentURIMetaData": "<dc:title>CH 25 - Classic Rewind</dc:title><upnp:albumArtURI>http://logo/25.png?a=1&amp;b=2</upnp:albumArtURI>"}
 on = {"uri": "x-sonosapi-hls:channel-linear%3aabc?sid=37", "title": "Known", "artist": "A", "album": "B", "album_art": "",
       "position": "0:00:23", "duration": "0:00:00", "metadata": "<upnp:albumArtURI>http://sxm/small_m.jpg</upnp:albumArtURI>"}
-assert watch.now_playing(Radio(on)) == ("http://covers/Known", {"title": "Known", "artist": "A", "album": "B"}, 23, None, "CH 25 - Classic Rewind")
+assert watch.now_playing(Radio(on)) == ("http://covers/Known", {"title": "Known", "artist": "A", "album": "B"}, 23, None, ("CH 25 - Classic Rewind", "http://logo/25.png?a=1&b=2"))
 assert watch.now_playing(Radio(dict(on, title="Unknown")))[0] == "http://sxm/small_m.jpg"
 assert watch.now_playing(Radio(dict(on, title="", metadata="")))[0] == "http://logo/25.png?a=1&b=2"
 room = watch.Room("Radio", None, lambda url: b"jpeg")
 room.speaker = Radio(on)
 room.tick(conf)
 assert room.display.page_state()["source"] == "CH 25 - Classic Rewind"
+assert room.display.page_state()["station"] == {"name": "CH 25 - Classic Rewind", "logo": "http://logo/25.png?a=1&b=2"}
 
 # over HTTP: status never carries the keys; controls and disconnect work, with the PIN that is set
 srv2 = serve({"Den": room.display}, port=0, path=path, spotify=sp)

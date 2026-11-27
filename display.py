@@ -36,6 +36,7 @@ LOOK = {                    # every one of these can be overridden per room
     "align": "center",      # "left" or "center"
     "fields": FIELDS,       # what the caption shows: any of CAPTION
     "upnext": "off",        # the next song, from Spotify: "off", "end" (the last 20 seconds) or "always"
+    "station": "logo",      # on radio, the station in a corner: "off", "name", or "logo" (its logo and name)
     "size": "medium",       # caption: "small", "medium", "large"
     "mute": 0.5,            # 0 = the cover as it is, 1 = a very faded print
     "mat": "paper",         # "paper", "white", "charcoal", or "cover" (tinted by the cover)
@@ -65,7 +66,7 @@ DEFAULTS = {
     "spotify": {"client_id": ""},   # of your app at developer.spotify.com; see spotify.py
 }
 REFERENCE = 75      # inches: the TV size the look settings are judged on when "same_size" is on
-PAGE = ["caption", "align", "fields", "size", "mute", "mat", "cover", "grain", "shift", "idle", "lyrics", "clock", "waves", "wave_level", "wave_color", "upnext"]   # what a TV page needs
+PAGE = ["caption", "align", "fields", "size", "mute", "mat", "cover", "grain", "shift", "idle", "lyrics", "clock", "waves", "wave_level", "wave_color", "upnext", "station"]   # what a TV page needs
 
 number = lambda v, lo, hi: type(v) in (int, float) and lo <= v <= hi
 clock = lambda v: isinstance(v, str) and re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d", v)
@@ -79,6 +80,7 @@ VALID = {
     "align": lambda v: v in ("left", "center"),
     "fields": lambda v: subset(v, CAPTION),
     "upnext": lambda v: v in ("off", "end", "always"),
+    "station": lambda v: v in ("off", "name", "logo"),
     "size": lambda v: v in ("small", "medium", "large"),
     "mute": lambda v: number(v, 0, 1),
     "mat": lambda v: v in ("paper", "white", "charcoal", "cover"),
@@ -166,7 +168,7 @@ class Display:
         self.tv_seen = 0            # when the JamFrame TV app last asked for this room
         self.tempo = None           # beats a minute of the song playing, when wanted and found
         self.duration = None        # its length in seconds
-        self.extra = {}             # from Spotify, when it is playing this song: next, liked, source
+        self.extra = {}             # next, liked, source (from Spotify, when it is playing this song); station (on radio)
 
     def pick(self):
         s = room_settings(settings(self.settings), self.room)
@@ -209,7 +211,7 @@ class Display:
                 "from": "cover/" + names[-2] if len(names) > 1 else None,
                 "lyrics": self.lyrics if self.url else None, "position": at if self.url else None,
                 "bpm": self.tempo if self.url else None, "duration": self.duration if self.url else None,
-                **{k: self.extra.get(k) if self.url else None for k in ("next", "liked", "source")}}
+                **{k: self.extra.get(k) if self.url else None for k in ("next", "liked", "source", "station")}}
 
 
 def serve(displays, port=PORT, speakers=(), path=SETTINGS, status=None, weather=None, spotify=None):

@@ -155,6 +155,8 @@ const SPEC = () => [
     { k: 'fields', name: 'Shows', many: [['title', 'Song'], ['artist', 'Artist'], ['album', 'Album'], ['source', 'Playlist'], ['liked', 'A heart if liked']] },
     { k: 'align', name: 'Position', chips: [['center', 'Centred'], ['left', 'Left']] },
     { k: 'size', name: 'Size', chips: [['small', 'Small'], ['medium', 'Medium'], ['large', 'Large']] },
+    { k: 'station', name: 'Radio station', chips: [['off', 'Off'], ['name', 'Name'], ['logo', 'Logo and name']],
+      note: 'On SiriusXM and other radio, the station sits in the bottom left corner.' },
     { k: 'upnext', name: 'Up next', chips: [['off', 'Off'], ['end', 'As the song ends'], ['always', 'Always']],
       note: 'Playlist, the heart and Up next need Spotify connected (under All rooms).' },
   ]],
