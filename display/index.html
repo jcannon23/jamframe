@@ -12,6 +12,12 @@
   #cap div { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   #title { font-size: 2.3em; }
   #by { font-size: 1.6em; margin-top: 0.4em; font-style: italic; opacity: 0.8; }
+  #src { font-size: 1.25em; margin-top: 0.55em; opacity: 0.6; letter-spacing: 0.04em; }
+  /* The next song, from Spotify, in the bottom corner. */
+  #next { position: fixed; bottom: 4.5vh; right: 5.5vh; max-width: 32vw; text-align: right; opacity: 0;
+          transition: opacity 2s, color 2s; font-family: "Iowan Old Style", Palatino, Georgia, serif; }
+  #next small { display: block; font-size: 1.4vh; letter-spacing: 0.22em; text-transform: uppercase; opacity: 0.6; }
+  #next div { font-size: 2.1vh; margin-top: 0.5vh; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   /* The song's words, in the style the settings page picked (class on #lyr). */
   #lyr { position: fixed; inset: 0; pointer-events: none; opacity: 0; transition: opacity 1.5s, color 2s;
          font-family: "Iowan Old Style", Palatino, Georgia, serif; }
@@ -52,7 +58,8 @@
 </style>
 <canvas id="c"></canvas>
 <canvas id="w"></canvas>
-<div id="cap"><div id="title"></div><div id="by"></div></div>
+<div id="cap"><div id="title"></div><div id="by"></div><div id="src"></div></div>
+<div id="next"><small>Up next</small><div></div></div>
 <div id="lyr"></div>
 <div id="clock"><div class="time"></div><div class="date"></div><div class="wx"></div></div>
 <div id="corner"><div class="time"></div><div class="wx"></div></div>
@@ -62,11 +69,11 @@
 // How it looks comes with the state too ("look", set on the settings page) and applies as it changes.
 const cv = document.getElementById('c'), g = cv.getContext('2d');
 const cap = document.getElementById('cap'), clock = document.getElementById('clock'), lyr = document.getElementById('lyr');
-const corner = document.getElementById('corner');
+const corner = document.getElementById('corner'), next = document.getElementById('next');
 const MATS = { paper: [232, 226, 215], white: [240, 239, 235], charcoal: [46, 44, 41] }, SHADE = [60, 54, 46];
 const SIZES = { small: 0.8, medium: 1, large: 1.3 };
 let look = { caption: true, align: 'center', fields: ['title', 'artist', 'album'], size: 'medium', mute: 0.5,
-             mat: 'paper', cover: 0.62, grain: true, shift: false, idle: 'black', brightness: 1, lyrics: 'off', clock: 'classic', waves: 'off', wave_level: 0.6, wave_color: 'edges' };
+             mat: 'paper', cover: 0.62, grain: true, shift: false, idle: 'black', brightness: 1, lyrics: 'off', clock: 'classic', waves: 'off', wave_level: 0.6, wave_color: 'edges', upnext: 'off' };
 let W, H, S, X, Y;          // canvas size, cover edge, cover position
 let ox = 0, oy = 0;         // burn-in shift, as a share of screen height
 
@@ -225,7 +232,7 @@ let played, stale = false;   // last "play it now" seen; look changed while a tr
 // What is up now, drawn still. Text takes a colour that reads on the mat behind it.
 function still() {
   frame(null, shown, 'fade', 1);
-  cap.style.color = clock.style.color = lyr.style.color = corner.style.color = ink(shown ? shown.mat : idleColor());
+  cap.style.color = clock.style.color = lyr.style.color = corner.style.color = next.style.color = ink(shown ? shown.mat : idleColor());
   const halo = rgb(shown ? shown.mat : idleColor());                 // keeps waves from running through the caption
   cap.style.textShadow = look.waves === 'off' ? '' : `0 0 0.6vh ${halo}, 0 0 1.2vh ${halo}, 0 0 2vh ${halo}`;
   lyr.style.opacity = shown ? 1 : 0;
@@ -287,14 +294,16 @@ function tick() {
 let capKey = '';
 function label(w) {
   const has = f => look.fields.includes(f) && w[f];
-  const title = has('title') || '', by = [has('artist'), has('album')].filter(Boolean).join(' \u2014 ');
-  const key = w.art && look.caption ? title + '\n' + by : '';
+  const title = (has('title') || '') + (has('title') && has('liked') ? '  \u2665' : '');
+  const by = [has('artist'), has('album')].filter(Boolean).join(' \u2014 '), src = has('source') ? 'From ' + w.source : '';
+  const key = w.art && look.caption ? title + '\n' + by + '\n' + src : '';
   if (key === capKey && (!key.trim() || cap.style.opacity === '1')) return;
   capKey = key; cap.style.opacity = 0;
   setTimeout(() => {
     if (capKey !== key || busy) return;
     document.getElementById('title').textContent = title;
     document.getElementById('by').textContent = by;
+    document.getElementById('src').textContent = src;
     cap.style.opacity = key.trim() ? 1 : 0;
   }, 900);
 }
@@ -333,6 +342,13 @@ function setLyrics() {
   else if (look.lyrics === 'margin') lyr.replaceChildren(div('col', div('roll', ...has.map(l => div('', l[1])))));
   else if (look.lyrics === 'backdrop') lyr.replaceChildren(div('big l'), div('big r'));
   else lyr.replaceChildren(div('one'));
+}
+
+// The next song: always, or only as this one ends.
+function nextTick() {
+  const n = wanted.next, near = wanted.duration && basePos !== null && wanted.duration - at() < 20;
+  next.lastChild.textContent = n ? [n.title, n.artist].filter(Boolean).join(' \u2014 ') : '';
+  next.style.opacity = n && shown && !busy && wanted.art && (look.upnext === 'always' || (look.upnext === 'end' && near)) ? 0.85 : 0;
 }
 
 function lyricTick() {
@@ -571,5 +587,5 @@ setInterval(() => {
 addEventListener('resize', () => { resize(); shownArt = undefined; shown = null; sync(); });
 resize();
 still();
-poll(); setInterval(poll, 2000); setInterval(tick, 10000); setInterval(lyricTick, 100);
+poll(); setInterval(poll, 2000); setInterval(tick, 10000); setInterval(lyricTick, 100); setInterval(nextTick, 1000);
 </script>

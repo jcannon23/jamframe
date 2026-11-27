@@ -209,3 +209,86 @@ assert post_to("settings.json", {"seconds": 9}, pin="2468") == 204
 now = json.loads(get("/settings.json"))
 assert now["seconds"] == 9 and now["pin_set"] is True and "pin" not in now
 print("settings ok")
+
+# Spotify, against a stand-in for its two servers: sign-in, what is playing, the controls, and a room using it
+import os, stat
+asked = []
+class FakeSpotify(BaseHTTPRequestHandler):
+    def log_message(self, *a):
+        pass
+    def answer(self, obj, code=200):
+        self.send_response(code); self.end_headers()
+        self.wfile.write(json.dumps(obj).encode() if obj is not None else b"")
+    def do_POST(self):
+        body = self.rfile.read(int(self.headers.get("Content-Length") or 0)).decode()
+        asked.append(("POST", self.path, body))
+        if self.path == "/api/token":
+            ok = "code_verifier=" in body or "refresh_token=R" in body
+            return self.answer({"access_token": "A", "refresh_token": "R", "expires_in": 3600} if ok else {}, 200 if ok else 400)
+        self.answer(None, 204)
+    def do_PUT(self):
+        asked.append((self.command, self.path, "")); self.answer(None, 204)
+    do_DELETE = do_PUT
+    def do_GET(self):
+        if self.headers.get("Authorization") != "Bearer A":
+            return self.answer({}, 401)
+        p = self.path.split("?")[0]
+        self.answer({"/v1/me/player": {"is_playing": True, "progress_ms": 61500, "currently_playing_type": "track",
+                                        "context": {"uri": "spotify:playlist:p1"},
+                                        "item": {"uri": "spotify:track:t1", "name": "One", "duration_ms": 200000,
+                                                 "artists": [{"name": "A"}]}},
+                     "/v1/me/library/contains": [True],
+                     "/v1/me/player/queue": {"queue": [{"name": "Two", "artists": [{"name": "B"}]}]},
+                     "/v1/playlists/p1": {"name": "Sunday Morning"}}.get(p, {}))
+fake = HTTPServer(("127.0.0.1", 0), FakeSpotify)
+threading.Thread(target=fake.serve_forever, daemon=True).start()
+os.environ["SPOTIFY_ACCOUNTS"] = "http://127.0.0.1:%d" % fake.server_port
+os.environ["SPOTIFY_API"] = "http://127.0.0.1:%d/v1" % fake.server_port
+import spotify
+keys = os.path.join(tempfile.mkdtemp(), "spotify.json")
+sp = spotify.Spotify(keys)
+link = sp.login_url("cid", "http://127.0.0.1:1/spotify/callback")
+state = parse_qs(urlparse(link).query)["state"][0]
+assert "code_challenge=" in link and "S256" in link and not sp.connected
+try:
+    sp.finish("cid", "http://127.0.0.1:1/spotify/callback", "code", "not-ours"); raise SystemExit("took a stranger's sign-in")
+except ValueError:
+    pass
+sp.pending = {state: "v" * 64}
+sp.finish("cid", "http://127.0.0.1:1/spotify/callback", "code", state)
+assert sp.connected and stat.S_IMODE(os.stat(keys).st_mode) == 0o600 and spotify.Spotify(keys).connected
+sp.poll("cid")
+n = sp.now
+assert (n["title"], n["artist"], n["progress"], n["liked"], n["next"], n["source"]) == \
+    ("One", "A", 61.5, True, {"title": "Two", "artist": "B"}, "Sunday Morning"), n
+assert sp.control("cid", "next") and sp.control("cid", "unlike") and sp.now["liked"] is False
+assert ("POST", "/v1/me/player/next", "") in asked and any(m == "DELETE" and "spotify%3Atrack%3At1" in p for m, p, _ in asked)
+
+# a room playing the same song takes Spotify's position and extras; a different song takes neither
+real_now = watch.now_playing
+room = watch.Room("Den", None, lambda url: b"jpeg")
+room.speaker = object()
+conf = settings(path)
+watch.now_playing = lambda *a: ("http://a/9", {"title": "one ", "artist": "A", "album": "B"}, 61, 200)
+room.tick(conf, sp.now)
+st = room.display.page_state()
+assert st["next"] == {"title": "Two", "artist": "B"} and st["source"] == "Sunday Morning" and 61.4 < st["position"] < 63
+watch.now_playing = lambda *a: ("http://a/9", {"title": "Other", "artist": "A", "album": "B"}, 5, 200)
+room.tick(conf, sp.now)
+assert room.display.page_state()["next"] is None and room.display.page_state()["position"] < 10
+watch.now_playing = real_now
+
+# over HTTP: status never carries the keys; controls and disconnect work, with the PIN that is set
+srv2 = serve({"Den": room.display}, port=0, path=path, spotify=sp)
+got = json.loads(urllib.request.urlopen("http://127.0.0.1:%d/spotify/status" % srv2.server_port).read())
+assert got["connected"] and got["now"]["title"] == "One" and "token" not in json.dumps(got) and got["redirect"].endswith("/spotify/callback")
+def spot(action, pin="2468"):
+    req = urllib.request.Request("http://127.0.0.1:%d/spotify" % srv2.server_port, json.dumps({"action": action}).encode(),
+                                 {"Content-Type": "application/json", "X-Pin": pin})
+    try:
+        return urllib.request.urlopen(req).status
+    except urllib.error.HTTPError as e:
+        return e.code
+assert spot("pause") == 204 and spot("pause", pin="0") == 403 and spot("explode") == 400
+assert spot("disconnect") == 204 and not sp.connected and not os.path.exists(keys)
+print("spotify ok")

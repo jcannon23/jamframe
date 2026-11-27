@@ -22,6 +22,7 @@ from urllib.parse import parse_qs, urlparse
 HERE = os.path.dirname(os.path.abspath(__file__))
 TRANSITIONS = ["develop", "inmat", "ink", "sleeve", "fade"]
 FIELDS = ["title", "artist", "album"]
+CAPTION = FIELDS + ["source", "liked"]     # the last two come from Spotify: the playlist, and a heart on liked songs
 LYRICS = ["off", "backdrop", "margin", "line", "typewriter"]
 CLOCKS = ["classic", "modern", "analog", "words"]
 WAVES = ["off", "ripples", "grooves", "emboss", "rays", "strings"]
@@ -33,7 +34,8 @@ LOOK = {                    # every one of these can be overridden per room
     "seconds": 7,           # length of a cover transition
     "caption": True,        # text under the cover
     "align": "center",      # "left" or "center"
-    "fields": FIELDS,       # which of them the caption shows
+    "fields": FIELDS,       # what the caption shows: any of CAPTION
+    "upnext": "off",        # the next song, from Spotify: "off", "end" (the last 20 seconds) or "always"
     "size": "medium",       # caption: "small", "medium", "large"
     "mute": 0.5,            # 0 = the cover as it is, 1 = a very faded print
     "mat": "paper",         # "paper", "white", "charcoal", or "cover" (tinted by the cover)
@@ -58,8 +60,9 @@ DEFAULTS = {
     "ignore": [],           # sources that never take a screen: "linein", "radio"
     "pin": "",              # digits; when set, changing settings needs it
     "weather": {"on": False, "place": "", "unit": "F"},   # shown with the clock, and in a corner of a kept cover
+    "spotify": {"client_id": ""},   # of your app at developer.spotify.com; see spotify.py
 }
-PAGE = ["caption", "align", "fields", "size", "mute", "mat", "cover", "grain", "shift", "idle", "lyrics", "clock", "waves", "wave_level", "wave_color"]   # what a TV page needs
+PAGE = ["caption", "align", "fields", "size", "mute", "mat", "cover", "grain", "shift", "idle", "lyrics", "clock", "waves", "wave_level", "wave_color", "upnext"]   # what a TV page needs
 
 number = lambda v, lo, hi: type(v) in (int, float) and lo <= v <= hi
 clock = lambda v: isinstance(v, str) and re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d", v)
@@ -71,7 +74,8 @@ VALID = {
     "seconds": lambda v: number(v, 1, 30),
     "caption": lambda v: isinstance(v, bool),
     "align": lambda v: v in ("left", "center"),
-    "fields": lambda v: subset(v, FIELDS),
+    "fields": lambda v: subset(v, CAPTION),
+    "upnext": lambda v: v in ("off", "end", "always"),
     "size": lambda v: v in ("small", "medium", "large"),
     "mute": lambda v: number(v, 0, 1),
     "mat": lambda v: v in ("paper", "white", "charcoal", "cover"),
@@ -98,6 +102,8 @@ VALID = {
         isinstance(name, str) and isinstance(o, dict) and all(k in LOOK and VALID[k](x) for k, x in o.items())
         for name, o in v.items()),
     "ignore": lambda v: subset(v, ("linein", "radio")),
+    "spotify": lambda v: (isinstance(v, dict) and set(v) == {"client_id"} and isinstance(v["client_id"], str)
+                          and re.fullmatch(r"[0-9A-Za-z]{0,64}", v["client_id"])),
     "pin": lambda v: isinstance(v, str) and re.fullmatch(r"\d{0,12}", v),
 }
 
@@ -152,6 +158,8 @@ class Display:
         self.position = None        # (seconds into the song, time.time() it was read), while playing
         self.tv_seen = 0            # when the JamFrame TV app last asked for this room
         self.tempo = None           # beats a minute of the song playing, when wanted and found
+        self.duration = None        # its length in seconds
+        self.extra = {}             # from Spotify, when it is playing this song: next, liked, source
 
     def pick(self):
         s = room_settings(settings(self.settings), self.room)
@@ -193,14 +201,16 @@ class Display:
         return {**self.state, "play": self.plays, "demo": self.demo,
                 "from": "cover/" + names[-2] if len(names) > 1 else None,
                 "lyrics": self.lyrics if self.url else None, "position": at if self.url else None,
-                "bpm": self.tempo if self.url else None}
+                "bpm": self.tempo if self.url else None, "duration": self.duration if self.url else None,
+                **{k: self.extra.get(k) if self.url else None for k in ("next", "liked", "source")}}
 
 
-def serve(displays, port=PORT, speakers=(), path=SETTINGS, status=None, weather=None):
+def serve(displays, port=PORT, speakers=(), path=SETTINGS, status=None, weather=None, spotify=None):
     """displays: room name -> Display. With no ?room= the first room answers.
     speakers: names of the Sonos rooms found, offered on the settings page.
     status: () -> what each room is doing, for the settings page.
-    weather: () -> the weather now, or None; see watch.find_weather."""
+    weather: () -> the weather now, or None; see watch.find_weather.
+    spotify: a spotify.Spotify, for signing in and the controls on the settings page."""
 
     def page(name):
         with open(os.path.join(HERE, "display", name), "rb") as f:
@@ -218,6 +228,23 @@ def serve(displays, port=PORT, speakers=(), path=SETTINGS, status=None, weather=
             name = url.path[7:] if url.path.startswith("/cover/") else None
             cover = next((d.covers[name] for d in list(displays.values()) if name in d.covers), None)
             conf = settings(path)
+            client, back = conf["spotify"]["client_id"], "http://127.0.0.1:%d/spotify/callback" % self.server.server_port
+            if spotify and url.path in ("/spotify/login", "/spotify/callback"):
+                try:
+                    if url.path == "/spotify/login":
+                        if not client:
+                            raise ValueError("no Client ID saved yet")
+                        to = spotify.login_url(client, back)
+                    else:
+                        query = parse_qs(url.query)
+                        spotify.finish(client, back, query.get("code", [""])[0], query.get("state", [""])[0])
+                        to = "/settings"
+                except ValueError as e:
+                    return self.send_error(400, str(e))
+                self.send_response(302)
+                self.send_header("Location", to)
+                self.end_headers()
+                return
             if url.path == "/":
                 body, kind = page("index.html")
             elif url.path == "/settings":
@@ -234,6 +261,8 @@ def serve(displays, port=PORT, speakers=(), path=SETTINGS, status=None, weather=
                     d.tv_seen = time.time()
                 body, kind = as_json({**(d.page_state() if d else {"art": None}), "look": look(room_settings(conf, room)),
                                       "weather": weather() if weather else None})
+            elif url.path == "/spotify/status":
+                body, kind = as_json(dict(spotify.status() if spotify else {"connected": False}, configured=bool(client), redirect=back))
             elif url.path == "/weather":
                 body, kind = as_json(weather() if weather else None)
             elif cover:
@@ -250,7 +279,7 @@ def serve(displays, port=PORT, speakers=(), path=SETTINGS, status=None, weather=
 
         def do_POST(self):
             # JSON only: a web page elsewhere cannot send that here without a preflight we never answer
-            if self.path not in ("/settings.json", "/play") or self.headers.get("Content-Type") != "application/json":
+            if self.path not in ("/settings.json", "/play", "/spotify") or self.headers.get("Content-Type") != "application/json":
                 return self.send_error(404)
             pin = settings(path)["pin"]
             if pin and not hmac.compare_digest(pin.encode(), (self.headers.get("X-Pin") or "").encode()):
@@ -259,6 +288,13 @@ def serve(displays, port=PORT, speakers=(), path=SETTINGS, status=None, weather=
                 body = json.loads(self.rfile.read(int(self.headers.get("Content-Length") or 0)))
                 if self.path == "/play":
                     displays[body["room"]].play(body.get("transition"))
+                elif self.path == "/spotify":
+                    if not spotify:
+                        raise ValueError("no Spotify link")
+                    if body["action"] == "disconnect":
+                        spotify.disconnect()
+                    elif not spotify.control(settings(path)["spotify"]["client_id"], body["action"]):
+                        return self.send_error(502, spotify.error or "Spotify did not take it")
                 else:
                     save(body, path)
             except (ValueError, KeyError, TypeError) as e:

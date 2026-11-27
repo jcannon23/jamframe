@@ -65,8 +65,8 @@ def find_tempo(artist, title):
     """Beats a minute for a song, or None when it cannot be found."""
     import requests
     try:
-        found = requests.get("https://api.deezer.com/search", timeout=6,
-                             params={"q": 'artist:"%s" track:"%s"' % (artist, title), "limit": 1}).json().get("data")
+        search = lambda q: requests.get("https://api.deezer.com/search", timeout=6, params={"q": q, "limit": 1}).json().get("data")
+        found = search('artist:"%s" track:"%s"' % (artist, title)) or search("%s %s" % (artist, title))   # exact, then loose
         if not found:
             return None
         track = requests.get("https://api.deezer.com/track/%s" % found[0]["id"], timeout=6).json()

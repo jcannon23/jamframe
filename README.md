@@ -20,6 +20,8 @@ like the rest of the art on the wall. When the music stops, the TV goes back to 
   margin, a single line, or typed out as it's sung.
 - **Sends sound waves off the cover.** Five styles, coloured by the cover's own edges, moving at the song's
   tempo. In Grooves the mat becomes a record that spins up when a song starts and winds down when it stops.
+- **Knows more with Spotify connected** (optional). Lyrics land on the line, the next song shows as this one
+  ends, the caption can name the playlist and mark liked songs, and the settings page gets skip, pause and like.
 - **Stays out of the way.** Never takes the screen from someone watching TV, ignores the TV's own sound,
   dims at night, and stays dark during quiet hours.
 
@@ -67,6 +69,7 @@ you make them and reach the screens within a few seconds.
 | Sound waves | Off, Ripples, Grooves, Pressed, Rays, Strings; strength; colour from the cover's edges or one ink |
 | Screen | Brightness, dimming at night, burn-in shift |
 | When the music stops | How long to wait, then black, the last cover (with the time in a corner), or a clock in one of four faces |
+| Spotify | Connect an account; previous, pause, next and like under the preview |
 | Weather | On or off, place, °F or °C; shown with the clock and the kept cover |
 | Quiet hours | Hours in which nothing is shown |
 | Rooms | Sonos room name and the address of its TV; status of each |
@@ -93,6 +96,20 @@ preview clip. It is the song's speed, not the position of each beat: nothing hea
 Weather comes from [Open-Meteo](https://open-meteo.com), also free and without an account. It is sent the place
 name you typed, then that place's coordinates.
 
+## Spotify (optional)
+
+Sonos reports where a song is to the second and nothing about what comes next. A connected Spotify account
+fills that in. Sign-in is Spotify's own (authorization code with PKCE): JamFrame never sees your password, and
+what Spotify hands back stays in `spotify.json` on your computer, readable only by you.
+
+1. At [developer.spotify.com](https://developer.spotify.com/dashboard) create an app. Tick **Web API**, and give
+   it the redirect address shown on the settings page: `http://127.0.0.1:8765/spotify/callback`.
+2. Paste the app's Client ID into **Settings → Spotify**.
+3. On the computer JamFrame runs on, press **Connect Spotify** and approve.
+
+The controls need Spotify Premium. A room uses Spotify's details only while Spotify is playing the same song
+that room's speaker is.
+
 ## TVs
 
 | Screen | How | Status |
@@ -114,6 +131,7 @@ debugging turned on at the TV. What is left to prove on real TVs is listed in
 | `display.py` | Serves the room pages and the settings page; holds every setting and its limits |
 | `display/index.html` | A room's screen: mat, cover, caption, lyrics, the changes between covers |
 | `display/settings.html` | The settings page |
+| `spotify.py` | The optional Spotify link |
 | `tempo.py` | A song's tempo: `python tempo.py "Artist" "Song"` |
 | `treat.py` | Cover in, finished 4K print out: `python treat.py cover.jpg out.jpg` |
 | `check.py` | Checks the lot against a stand-in TV: `python check.py` |

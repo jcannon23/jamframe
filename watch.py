@@ -229,8 +229,8 @@ class Room:
         self.song = None         # the song self.display.lyrics was looked up for
         self.beat = None         # the song self.display.tempo was looked up for
 
-    def tick(self, conf):
-        """conf: all settings."""
+    def tick(self, conf, spot=None):
+        """conf: all settings. spot: what the linked Spotify account is playing (spotify.Spotify.now), if anything."""
         mine = room_settings(conf, self.name)
         if self.watcher and not self.clean:
             self.watcher.cleanup()
@@ -245,6 +245,12 @@ class Room:
             if song != self.song:        # looked up once per song, found or not
                 self.song = song
                 self.display.lyrics = find_lyrics(song, playing[3]) if song and song["title"] else None
+            self.display.duration, self.display.extra = playing[3], {}
+            if spot and spot["playing"] and spot["title"].strip().lower() == playing[1]["title"].strip().lower():
+                # the same song: Spotify knows where it is to the millisecond, and what comes after
+                self.display.position = (spot["progress"], spot["at"])
+                self.display.duration = spot["duration"] or playing[3]
+                self.display.extra = {k: spot[k] for k in ("next", "liked", "source")}
             beat = mine["waves"] != "off" and playing[1]
             if beat != self.beat:        # the tempo takes a second or two to work out: not in this loop
                 self.beat, self.display.tempo = beat, None
@@ -276,8 +282,10 @@ if __name__ == "__main__":
             room.watcher.restore()
 
     weather = {}     # read by the pages; refreshed in the loop below so a slow answer never holds a page up
+    from spotify import Spotify
+    spot = Spotify()
     serve(displays, speakers=speakers, status=lambda: {name: r.status() for name, r in list(rooms.items())},
-          weather=lambda: weather.get("now"))
+          weather=lambda: weather.get("now"), spotify=spot)
     signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))   # so `finally` runs under launchd too
     print("settings at http://localhost:%d/settings" % PORT, flush=True)
     looked = 0
@@ -285,6 +293,8 @@ if __name__ == "__main__":
         while True:
             conf = settings()        # re-read every round: the settings page changes it
             weather["now"] = find_weather(conf["weather"])
+            if conf["spotify"]["client_id"] and spot.connected:
+                spot.poll(conf["spotify"]["client_id"])
             for name in [n for n, r in rooms.items() if n not in conf["rooms"] or conf["rooms"][n] != r.tv]:
                 room = rooms.pop(name)       # removed, or given a different TV
                 del displays[name]
@@ -306,7 +316,7 @@ if __name__ == "__main__":
                     r.speaker = speakers[r.name]
                     print("found speaker:", r.name, flush=True)
                 try:
-                    r.tick(conf)
+                    r.tick(conf, spot.now)
                     r.error = None
                 except (OSError, soco.exceptions.SoCoException) as e:
                     if str(e) != r.error:    # TV asleep, speaker rebooting, Wi-Fi blip: say it once, keep trying

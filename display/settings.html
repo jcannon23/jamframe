@@ -56,6 +56,10 @@
     <div id="screen"><iframe title="Preview of the room's screen"></iframe></div>
     <div id="now"></div>
     <div class="row" style="justify-content: center; margin-top: 6px"><div class="chips" id="scope"></div></div>
+    <div class="row" id="spot" style="justify-content: center; margin-top: 8px" hidden>
+      <button data-do="previous">Previous</button><button data-do="pause" id="spot-play">Pause</button>
+      <button data-do="next">Next</button><button data-do="like" id="spot-like">Like</button>
+    </div>
     <div id="status">Loading…</div>
   </div>
   <div id="own"></div>
@@ -67,6 +71,14 @@
       <div id="rooms"></div>
       <div class="row"><button id="add">Add room</button></div>
       <datalist id="speakers"></datalist>
+    </section>
+    <section>
+      <h2>Spotify</h2>
+      <p class="note" id="sp-note"></p>
+      <div class="row"><span class="name">Client ID</span><input type="text" id="sp-id" maxlength="64" autocomplete="off" placeholder="From your app at developer.spotify.com"></div>
+      <div class="row"><button id="sp-connect">Connect Spotify</button><button id="sp-off" hidden>Disconnect</button></div>
+      <p class="note">Adds the exact place in the song (lyrics land on the line), what is up next, the playlist name, a heart on liked songs, and the buttons under the preview. Sign-in happens on Spotify's own site; JamFrame never sees your password.</p>
+      <p class="note">Once: at developer.spotify.com create an app, give it the redirect address <b id="sp-back"></b>, tick Web API, and paste its Client ID here. Connect from the computer JamFrame runs on.</p>
     </section>
     <section>
       <h2>Weather</h2>
@@ -112,9 +124,11 @@ const SPEC = () => [
   ]],
   ['Caption', [
     { k: 'caption', name: 'Caption', chips: ONOFF },
-    { k: 'fields', name: 'Shows', many: [['title', 'Song'], ['artist', 'Artist'], ['album', 'Album']] },
+    { k: 'fields', name: 'Shows', many: [['title', 'Song'], ['artist', 'Artist'], ['album', 'Album'], ['source', 'Playlist'], ['liked', 'A heart if liked']] },
     { k: 'align', name: 'Position', chips: [['center', 'Centred'], ['left', 'Left']] },
     { k: 'size', name: 'Size', chips: [['small', 'Small'], ['medium', 'Medium'], ['large', 'Large']] },
+    { k: 'upnext', name: 'Up next', chips: [['off', 'Off'], ['end', 'As the song ends'], ['always', 'Always']],
+      note: 'Playlist, the heart and Up next need Spotify connected (under All rooms).' },
   ]],
   ['Lyrics', [
     { k: 'lyrics', chips: [['off', 'Off'], ['backdrop', 'Backdrop'], ['margin', 'Margin'], ['line', 'Line'], ['typewriter', 'Typewriter']],
@@ -257,6 +271,7 @@ async function save(kept) {
   own();
   conf.ignore = [...$('ignore').querySelectorAll('input')].filter(i => i.checked).map(i => i.value);
   const picked = id => $(id).querySelector('input:checked').value;
+  conf.spotify = { client_id: $('sp-id').value.trim() };
   conf.weather = { on: picked('wx-on') === 'on', place: $('wx-place').value.trim(), unit: picked('wx-unit') };
   const { transitions, speakers, pin_set, ...body } = conf;
   status.className = ''; status.textContent = 'Saving…';
@@ -290,6 +305,19 @@ async function watch() {
     row.lastChild.textContent = name ? say(name, state && state[name]) : '';
     row.lastChild.className = 'note' + (state && state[name] && (state[name].error || !state[name].speaker) ? ' bad' : '');
   }
+  try {
+    const sp = await (await fetch('spotify/status', { cache: 'no-store' })).json();
+    $('sp-back').textContent = sp.redirect;
+    $('sp-note').className = 'note' + (sp.error ? ' bad' : '');
+    $('sp-note').textContent = sp.error ? 'Problem: ' + sp.error : sp.connected ? 'Connected.' + (sp.now ? ` Playing ${sp.now.title} by ${sp.now.artist}.` : ' Nothing playing on the account.')
+      : sp.configured ? 'Client ID saved. Press Connect on the computer JamFrame runs on.' : 'Not set up.';
+    $('sp-connect').hidden = sp.connected || !sp.configured; $('sp-off').hidden = !sp.connected;
+    $('spot').hidden = !(sp.connected && sp.now);
+    if (sp.now) {
+      $('spot-play').textContent = sp.now.playing ? 'Pause' : 'Play'; $('spot-play').dataset.do = sp.now.playing ? 'pause' : 'play';
+      $('spot-like').textContent = sp.now.liked ? 'Liked ♥' : 'Like'; $('spot-like').dataset.do = sp.now.liked ? 'unlike' : 'like';
+    }
+  } catch (e) {}
   try {      // the page takes its colour from the cover on the previewed screen
     const st = room ? await (await fetch('state?room=' + encodeURIComponent(room), { cache: 'no-store' })).json() : {};
     if (st.art) $('wash').style.backgroundImage = `url("${st.art}")`;
@@ -314,6 +342,14 @@ async function watch() {
   pick('wx-on', [['on', 'On'], ['off', 'Off']], conf.weather.on ? 'on' : 'off');
   pick('wx-unit', [['F', '°F'], ['C', '°C']], conf.weather.unit);
   $('wx-place').value = conf.weather.place; $('wx-place').onchange = () => save(true);
+  $('sp-id').value = conf.spotify.client_id; $('sp-id').onchange = () => save(true);
+  $('sp-connect').onclick = () => { location.href = `http://127.0.0.1:${location.port}/spotify/login`; };   // Spotify only sends people back to this exact address
+  $('sp-off').onclick = async () => { await send('spotify', { action: 'disconnect' }); watch(); };
+  for (const b of $('spot').children) b.onclick = async () => {
+    const r = await send('spotify', { action: b.dataset.do });
+    status.className = r.ok ? '' : 'bad'; status.textContent = r.ok ? '' : 'Spotify did not take that.';
+    setTimeout(watch, 700);
+  };
   const pinNote = () => { $('pinnote').textContent = conf.pin_set ? 'A PIN is set: changing settings from a new device asks for it.' : 'No PIN: anyone on your network can change these settings.'; };
   $('setpin').onclick = async () => {
     const value = $('pin').value.trim();
