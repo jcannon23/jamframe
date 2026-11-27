@@ -1,0 +1,328 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>JamFrame settings</title>
+<style>
+  :root { --paper: #e8e2d7; --card: #f1ece3; --ink: #3c362e; --soft: #7a7266; --line: #cfc7b9; --accent: #8a5a44; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--paper); color: var(--ink); font: 16px/1.45 "Iowan Old Style", Palatino, Georgia, serif; }
+  /* Behind everything: paper with grain, a record sliding in from the corner, and a soft wash of colour
+     from the cover that is playing. */
+  #wash { position: fixed; inset: -12vmax; z-index: -3; background: center / cover no-repeat; filter: blur(80px) saturate(1.3);
+          opacity: 0; transition: opacity 2.5s; pointer-events: none; }
+  body::before { content: ""; position: fixed; z-index: -2; width: 150vmin; height: 150vmin; right: -62vmin; top: -70vmin;
+                 border-radius: 50%; pointer-events: none; box-shadow: 0 2vmin 6vmin rgba(40, 36, 30, 0.18);
+                 background: radial-gradient(circle, var(--paper) 0 1.2%, #b9765a 1.3% 13%, rgba(40, 36, 30, 0.5) 13.2% 14%, transparent 14.2%),
+                             repeating-radial-gradient(circle, rgba(255, 255, 255, 0.05) 0 1px, transparent 1px 7px),
+                             radial-gradient(circle, #3a3531, #26231f);
+                 opacity: 0.2; }
+  body::after { content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none; opacity: 0.35; mix-blend-mode: multiply;
+                background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.24 0 0 0 0 0.21 0 0 0 0 0.18 0 0 0 0.5 0'/%3E%3C/filter%3E%3Crect width='220' height='220' filter='url(%23n)'/%3E%3C/svg%3E"); }
+  main { max-width: 680px; margin: 0 auto; padding: 20px 16px 72px; }
+  h1 { font-size: 26px; font-weight: normal; margin: 0 0 10px; }
+  #top { position: sticky; top: 0; z-index: 2; margin: 0 -16px; padding: 8px 16px 10px; border-bottom: 1px solid var(--line);
+         background: rgba(232, 226, 215, 0.72); -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px); }
+  #screen { width: min(100%, 44vh * 16 / 9); aspect-ratio: 16 / 9; margin: 0 auto; background: #000; border: 6px solid #2a2724;
+            border-radius: 3px; box-shadow: 0 3px 10px rgba(40, 36, 30, 0.3); }
+  #screen iframe { width: 100%; height: 100%; border: 0; display: block; pointer-events: none; }
+  #now, #status { color: var(--soft); font-style: italic; font-size: 14px; min-height: 21px; text-align: center; margin-top: 6px; }
+  section { background: rgba(241, 236, 227, 0.88); border: 1px solid var(--line); border-radius: 6px; padding: 16px; margin-top: 16px; }
+  h2 { font-size: 13px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--soft); font-weight: normal; margin: 0 0 4px; }
+  .row { display: flex; align-items: center; gap: 12px; margin-top: 12px; flex-wrap: wrap; }
+  .row > .name { flex: 0 0 140px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chips label { cursor: pointer; }
+  .chips input { position: absolute; opacity: 0; }
+  .chips span { display: block; padding: 6px 12px; border: 1px solid var(--line); border-radius: 999px; background: var(--paper); }
+  .chips input:checked + span { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+  .chips input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 2px; }
+  input[type=range] { flex: 1; min-width: 140px; accent-color: var(--accent); }
+  output { flex: 0 0 64px; text-align: right; color: var(--soft); }
+  input[type=text], input[type=time] { font: inherit; color: inherit; background: var(--paper); border: 1px solid var(--line);
+                                       border-radius: 4px; padding: 6px 8px; min-width: 0; }
+  input[type=text] { flex: 1 1 150px; }
+  button { font: inherit; color: var(--ink); background: var(--paper); border: 1px solid var(--line); border-radius: 4px;
+           padding: 6px 12px; cursor: pointer; }
+  .room { padding: 10px 0; border-top: 1px solid var(--line); margin-top: 10px; }
+  .room > div { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .room a { color: var(--accent); font-size: 14px; white-space: nowrap; }
+  .note { color: var(--soft); font-size: 14px; margin: 6px 0 0; }
+  .bad { color: #a23b2a; }
+</style>
+<div id="wash"></div>
+<main>
+  <h1>JamFrame</h1>
+  <div id="top">
+    <div id="screen"><iframe title="Preview of the room's screen"></iframe></div>
+    <div id="now"></div>
+    <div class="row" style="justify-content: center; margin-top: 6px"><div class="chips" id="scope"></div></div>
+    <div id="status">Loading…</div>
+  </div>
+  <div id="own"></div>
+  <div id="form"></div>
+  <div id="house">
+    <section>
+      <h2>Rooms</h2>
+      <p class="note">Sonos room name, exactly as in the Sonos app, and, for an art TV running BetterFrame, its address. Leave the address empty for a TV running the JamFrame TV app or showing the room's page in a browser.</p>
+      <div id="rooms"></div>
+      <div class="row"><button id="add">Add room</button></div>
+      <datalist id="speakers"></datalist>
+    </section>
+    <section>
+      <h2>Weather</h2>
+      <div class="row"><span class="name">Weather</span><div class="chips" id="wx-on"></div></div>
+      <div class="row"><span class="name">Place</span><input type="text" id="wx-place" maxlength="80" placeholder="Town, e.g. Portland, Oregon"></div>
+      <div class="row"><span class="name">Degrees</span><div class="chips" id="wx-unit"></div></div>
+      <p class="note" id="wx-note"></p>
+      <p class="note">Shown with the clock, and in a corner of a kept cover. From open-meteo.com, which is sent the place name.</p>
+    </section>
+    <section>
+      <h2>Never show</h2>
+      <div class="row"><div class="chips" id="ignore"></div></div>
+      <p class="note">Sound from these sources never takes a screen. The TV's own sound never does.</p>
+    </section>
+    <section>
+      <h2>PIN</h2>
+      <div class="row"><input type="text" id="pin" inputmode="numeric" maxlength="12" placeholder="Digits; empty for none" autocomplete="off">
+        <button id="setpin">Set PIN</button></div>
+      <p class="note" id="pinnote"></p>
+    </section>
+  </div>
+</main>
+<script>
+const $ = id => document.getElementById(id), status = $('status');
+const el = (tag, props, ...kids) => { const e = Object.assign(document.createElement(tag), props); e.append(...kids); return e; };
+const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+const pct = v => Math.round(v * 100) + '%';
+const NAMES = { rotate: 'Rotate', shuffle: 'Shuffle', develop: 'Develop', inmat: 'Dissolve', ink: 'Ink bleed', sleeve: 'Sleeve', fade: 'Fade' };
+const ONOFF = [[true, 'On'], [false, 'Off']];
+
+// Every look setting: [section, [controls]]. k is the setting ("night.from" reaches inside one).
+const SPEC = () => [
+  ['Cover change', [
+    { k: 'transition', chips: ['rotate', 'shuffle', ...conf.transitions].map(t => [t, NAMES[t] || t]) },
+    { k: 'seconds', name: 'Length', range: [2, 20, 1], fmt: v => v + ' s' },
+    { button: 'Play it now', act: play, note: 'Runs the chosen change on the screen above, with music playing.' },
+  ]],
+  ['Print', [
+    { k: 'mute', name: 'Fading', range: [0, 1, 0.05], fmt: pct },
+    { k: 'cover', name: 'Cover size', range: [0.4, 0.78, 0.02], fmt: pct },
+    { k: 'mat', name: 'Mat', chips: [['paper', 'Paper'], ['white', 'White'], ['charcoal', 'Charcoal'], ['cover', 'From the cover']] },
+    { k: 'grain', name: 'Paper grain', chips: ONOFF },
+  ]],
+  ['Caption', [
+    { k: 'caption', name: 'Caption', chips: ONOFF },
+    { k: 'fields', name: 'Shows', many: [['title', 'Song'], ['artist', 'Artist'], ['album', 'Album']] },
+    { k: 'align', name: 'Position', chips: [['center', 'Centred'], ['left', 'Left']] },
+    { k: 'size', name: 'Size', chips: [['small', 'Small'], ['medium', 'Medium'], ['large', 'Large']] },
+  ]],
+  ['Lyrics', [
+    { k: 'lyrics', chips: [['off', 'Off'], ['backdrop', 'Backdrop'], ['margin', 'Margin'], ['line', 'Line'], ['typewriter', 'Typewriter']],
+      note: 'Backdrop: large and faint either side of the cover. Margin: a column beside it. Line and Typewriter: one line above it. Words come from lrclib.net, which is sent the song, artist and album names; songs it does not know show none.' },
+  ]],
+  ['Sound waves', [
+    { k: 'waves', chips: [['off', 'Off'], ['ripples', 'Ripples'], ['grooves', 'Grooves'], ['emboss', 'Pressed'], ['rays', 'Rays'], ['strings', 'Strings']] },
+    { k: 'wave_level', name: 'Strength', range: [0.1, 1, 0.05], fmt: pct,
+      note: 'Waves leave the cover while music plays. They are drawn, not heard: the screen has no microphone, so each song gets its own steady pulse rather than its real beat.' },
+  ]],
+  ['Screen', [
+    { k: 'brightness', name: 'Brightness', range: [0.05, 1, 0.05], fmt: pct },
+    { k: 'night.on', name: 'Dim at night', chips: ONOFF },
+    { k: 'night.from', name: 'From', time: 1 }, { k: 'night.to', name: 'Until', time: 1 },
+    { k: 'night.brightness', name: 'Night brightness', range: [0.05, 1, 0.05], fmt: pct },
+    { k: 'shift', name: 'Burn-in shift', chips: ONOFF, note: 'Moves the picture a few pixels every few minutes.' },
+  ]],
+  ['When the music stops', [
+    { k: 'grace', name: 'Wait', range: [0, 600, 15], fmt: v => v < 60 ? v + ' s' : (v / 60) + ' min' },
+    { k: 'idle', name: 'Then show', chips: [['black', 'Black'], ['last', 'The last cover'], ['clock', 'A clock']],
+      note: 'The last cover keeps the time in a corner. Both show the weather when it is on (set up under All rooms).' },
+    { k: 'clock', name: 'Clock face', chips: [['classic', 'Classic'], ['modern', 'Modern'], ['analog', 'Analog'], ['words', 'In words']] },
+  ]],
+  ['Quiet hours', [
+    { k: 'quiet.on', name: 'Stay dark', chips: ONOFF },
+    { k: 'quiet.from', name: 'From', time: 1 }, { k: 'quiet.to', name: 'Until', time: 1 },
+  ]],
+];
+
+let conf, scope = null, form = {}, state = {};   // scope: null = all rooms, or one room's name
+const LOOK = () => SPEC().flatMap(s => s[1]).filter(c => c.k).map(c => c.k.split('.')[0]);
+const get = k => k.split('.').reduce((o, p) => o[p], form);
+const put = (k, v) => { const [a, b] = k.split('.'); b ? form[a] = { ...form[a], [b]: v } : form[a] = v; };
+
+function control(c) {
+  const row = el('div', { className: 'row' });
+  if (c.name) row.append(el('span', { className: 'name', textContent: c.name }));
+  if (c.chips || c.many) {
+    const box = el('div', { className: 'chips' });
+    for (const [value, text] of c.chips || c.many) {
+      const on = c.many ? get(c.k).includes(value) : get(c.k) === value;
+      const input = el('input', { type: c.many ? 'checkbox' : 'radio', name: c.k, checked: on });
+      input.onchange = () => {
+        put(c.k, c.many ? c.many.map(m => m[0]).filter((m, i) => box.querySelectorAll('input')[i].checked) : value);
+        save();
+      };
+      box.append(el('label', {}, input, el('span', { textContent: text })));
+    }
+    row.append(box);
+  } else if (c.range) {
+    const out = el('output', { textContent: c.fmt(get(c.k)) });
+    const input = el('input', { type: 'range', min: c.range[0], max: c.range[1], step: c.range[2], value: get(c.k) });
+    input.oninput = () => { out.textContent = c.fmt(+input.value); };
+    input.onchange = () => { put(c.k, +input.value); save(); };
+    row.append(input, out);
+  } else if (c.time) {
+    const input = el('input', { type: 'time', value: get(c.k) });
+    input.onchange = () => { if (input.value) { put(c.k, input.value.slice(0, 5)); save(); } };
+    row.append(input);
+  } else if (c.button) row.append(el('button', { textContent: c.button, onclick: c.act }));
+  if (c.note) row.append(el('span', { className: 'note', style: 'margin: 0; flex-basis: 100%', textContent: c.note }));
+  return row;
+}
+
+// The controls show one scope: every room's settings, or one room's (the shared ones with its own on top).
+function render() {
+  form = JSON.parse(JSON.stringify({ ...conf, ...(scope ? conf.overrides[scope] : {}) }));
+  $('form').replaceChildren(...SPEC().map(([title, controls]) => el('section', {}, el('h2', { textContent: title }), ...controls.map(control))));
+  $('house').hidden = !!scope;
+  own();
+  const names = Object.keys(conf.rooms);
+  $('scope').replaceChildren(...[null, ...names].map(name => {
+    const input = el('input', { type: 'radio', name: 'scope', checked: name === scope });
+    input.onchange = () => { scope = name; render(); };
+    return el('label', {}, input, el('span', { textContent: name || 'All rooms' }));
+  }));
+  const room = scope || names[0], src = room ? './?room=' + encodeURIComponent(room) : 'about:blank';
+  const frame = document.querySelector('iframe');
+  if (frame.getAttribute('src') !== src) frame.src = src;
+}
+
+// In a room's scope: how many settings are its own, and the way back.
+function own() {
+  const n = scope ? Object.keys(conf.overrides[scope] || {}).length : 0;
+  $('own').replaceChildren(...(!scope ? [] : [el('section', {},
+    el('p', { className: 'note', style: 'margin: 0', textContent: n ? `${scope} has ${n} setting${n > 1 ? 's' : ''} of its own; the rest follow All rooms.` : `${scope} follows All rooms. Change anything here and it applies to ${scope} only.` }),
+    n ? el('div', { className: 'row' }, el('button', { textContent: 'Back to All rooms settings', onclick: () => { delete conf.overrides[scope]; render(); save(true); } })) : '')]));
+}
+
+function roomRow(name, tv) {
+  const link = el('a', { target: '_blank', textContent: 'Open page' });
+  const n = el('input', { type: 'text', value: name, placeholder: 'Sonos room' });
+  n.setAttribute('list', 'speakers'); n.dataset.was = name;
+  const t = el('input', { type: 'text', value: tv || '', placeholder: 'Art TV address, e.g. 192.168.1.50' });
+  const row = el('div', { className: 'room' },
+    el('div', {}, n, t, link, el('button', { textContent: 'Remove', onclick: () => { row.remove(); rooms(); } })),
+    el('div', { className: 'note' }));
+  const point = () => { link.href = './?room=' + encodeURIComponent(n.value.trim()); link.hidden = !n.value.trim(); };
+  n.oninput = point; n.onchange = t.onchange = rooms; point();
+  return row;
+}
+
+// Rooms as the rows have them now. A renamed room keeps its own settings.
+function rooms() {
+  const list = {}, overrides = {};
+  for (const row of $('rooms').children) {
+    const [n, t] = row.querySelectorAll('input'), name = n.value.trim();
+    if (!name) continue;
+    list[name] = t.value.trim() || null;
+    if (conf.overrides[n.dataset.was]) overrides[name] = conf.overrides[n.dataset.was];
+    n.dataset.was = name;
+  }
+  conf.rooms = list; conf.overrides = overrides;
+  render(); save(true);
+}
+
+async function send(path, body) {
+  const pin = () => { try { return localStorage.getItem('pin') || ''; } catch (e) { return ''; } };
+  const go = () => fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Pin': pin() }, body: JSON.stringify(body) });
+  let r = await go();
+  if (r.status === 403) {
+    const typed = prompt('PIN');
+    if (typed === null) return r;
+    try { localStorage.setItem('pin', typed); } catch (e) {}
+    r = await go();
+  }
+  return r;
+}
+
+// kept: conf is already right (rooms, reset); otherwise fold the form into this scope first.
+async function save(kept) {
+  if (kept !== true) {
+    const mine = Object.fromEntries(LOOK().map(k => [k, form[k]]));
+    if (scope) {
+      const own = Object.fromEntries(Object.entries(mine).filter(([k, v]) => !same(v, conf[k])));
+      Object.keys(own).length ? conf.overrides[scope] = own : delete conf.overrides[scope];
+    } else Object.assign(conf, mine);
+  }
+  own();
+  conf.ignore = [...$('ignore').querySelectorAll('input')].filter(i => i.checked).map(i => i.value);
+  const picked = id => $(id).querySelector('input:checked').value;
+  conf.weather = { on: picked('wx-on') === 'on', place: $('wx-place').value.trim(), unit: picked('wx-unit') };
+  const { transitions, speakers, pin_set, ...body } = conf;
+  status.className = ''; status.textContent = 'Saving…';
+  try {
+    const r = await send('settings.json', body);
+    status.className = r.ok ? '' : 'bad';
+    status.textContent = r.ok ? 'Saved' : r.status === 403 ? 'Not saved: wrong PIN.'
+      : 'Not saved: check the TV addresses (like 192.168.1.50).';
+  } catch (e) { status.className = 'bad'; status.textContent = 'Not saved: the watcher is not answering.'; }
+}
+
+async function play() {
+  const room = scope || Object.keys(conf.rooms)[0];
+  if (!state[room] || !state[room].playing) { status.textContent = 'Play music in ' + (room || 'a room') + ' first.'; return; }
+  await send('play', { room, transition: form.transition });
+  status.textContent = 'Playing it on the screen above.';
+}
+
+// What each room is doing, under the preview and on its row.
+async function watch() {
+  try { state = await (await fetch('status', { cache: 'no-store' })).json(); } catch (e) { state = null; }
+  const say = (name, s) => !state ? 'The watcher is not answering.' : !s ? 'Starting…'
+    : s.error ? 'Problem: ' + s.error
+    : !s.speaker ? `No Sonos room called “${name}” found yet.`
+    : (s.playing ? `Playing ${s.playing.title || 'music'}${s.playing.artist ? ' by ' + s.playing.artist : ''}` : 'Nothing playing')
+      + (s.tv ? ' · art TV' : s.app ? ' · TV app connected' : '');
+  const room = scope || Object.keys(conf.rooms)[0];
+  $('now').textContent = room ? room + ': ' + say(room, state && state[room]) : 'Add a room below to start.';
+  for (const row of $('rooms').children) {
+    const name = row.querySelector('input').value.trim();
+    row.lastChild.textContent = name ? say(name, state && state[name]) : '';
+    row.lastChild.className = 'note' + (state && state[name] && (state[name].error || !state[name].speaker) ? ' bad' : '');
+  }
+  try {      // the page takes its colour from the cover on the previewed screen
+    const st = room ? await (await fetch('state?room=' + encodeURIComponent(room), { cache: 'no-store' })).json() : {};
+    if (st.art) $('wash').style.backgroundImage = `url("${st.art}")`;
+    $('wash').style.opacity = st.art ? 0.5 : 0;
+  } catch (e) {}
+  try {
+    const w = await (await fetch('weather', { cache: 'no-store' })).json();
+    $('wx-note').className = 'note' + (w && w.error ? ' bad' : '');
+    $('wx-note').textContent = !w ? '' : w.error || `${w.place}: ${w.temp}°, ${w.text.toLowerCase()}`;
+  } catch (e) {}
+}
+
+(async () => {
+  try { conf = await (await fetch('settings.json', { cache: 'no-store' })).json(); }
+  catch (e) { status.textContent = 'The watcher is not answering.'; return; }
+  for (const name of conf.speakers) $('speakers').append(el('option', { value: name }));
+  for (const [name, tv] of Object.entries(conf.rooms)) $('rooms').append(roomRow(name, tv));
+  for (const [value, text] of [['linein', 'Line-in'], ['radio', 'Radio stations']])
+    $('ignore').append(el('label', {}, el('input', { type: 'checkbox', value, checked: conf.ignore.includes(value), onchange: () => save(true) }), el('span', { textContent: text })));
+  const pick = (id, options, value) => { for (const [v, text] of options)
+    $(id).append(el('label', {}, el('input', { type: 'radio', name: id, value: v, checked: v === value, onchange: () => save(true) }), el('span', { textContent: text }))); };
+  pick('wx-on', [['on', 'On'], ['off', 'Off']], conf.weather.on ? 'on' : 'off');
+  pick('wx-unit', [['F', '°F'], ['C', '°C']], conf.weather.unit);
+  $('wx-place').value = conf.weather.place; $('wx-place').onchange = () => save(true);
+  const pinNote = () => { $('pinnote').textContent = conf.pin_set ? 'A PIN is set: changing settings from a new device asks for it.' : 'No PIN: anyone on your network can change these settings.'; };
+  $('setpin').onclick = async () => {
+    const value = $('pin').value.trim();
+    if (!/^\d{0,12}$/.test(value)) { $('pinnote').textContent = 'Digits only.'; return; }
+    const r = await send('settings.json', { pin: value });
+    if (r.ok) { try { localStorage.setItem('pin', value); } catch (e) {} conf.pin_set = !!value; $('pin').value = ''; }
+    pinNote(); if (!r.ok) $('pinnote').textContent = 'Not changed: wrong PIN.';
+  };
+  $('add').onclick = () => $('rooms').append(roomRow('', ''));
+  pinNote(); render(); status.textContent = '';
+  watch(); setInterval(watch, 3000);
+})();
+</script>

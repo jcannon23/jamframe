@@ -1,0 +1,57 @@
+# Pickup list: the 85QM6K (and the other TVs)
+
+Nothing below can be done until a TV is on the same network as the computer running the watcher.
+
+## What is already done
+
+- The **JamFrame TV app** is written and builds (`scripts/build-tv.sh` → `tv/build/jamframe-tv.apk`). It has
+  never run on a TV.
+- `scripts/install-tv.sh <TV address> "<Sonos room>"` installs it, grants its two permissions and points it at
+  the watcher.
+- The watcher needs nothing new: the app asks it for the room's state like any browser does. The settings
+  page shows "TV app connected" on the room's row once the app is asking.
+- Build tools live in `~/jamframe-tools` on the Mac (JDK 17, Android SDK, adb). They are not in the repo.
+
+## Steps, in order
+
+1. On the TV: Settings → System → About → press "Android TV OS build" seven times. Then Developer options →
+   USB debugging on. Note the TV's IP (Network & Internet), and reserve it in the router.
+2. Make sure the room has a Sonos speaker, and add the room on the settings page (address left empty).
+3. From the Mac: `scripts/install-tv.sh <TV IP> "<Sonos room name>"`. The TV shows an "allow debugging?"
+   prompt the first time: accept it on the TV.
+4. Success looks like: the TV opens the room's page, and the room's row on the settings page reads
+   "TV app connected".
+
+## What has to be checked on the real TV (all unproven)
+
+| Check | How | If it fails |
+|---|---|---|
+| Page renders and animates smoothly | Play music, change album | Lower the 1920 px cap in `display/index.html` `resize()` |
+| Opens by itself from the **home screen** | TV on home, start music | The `SYSTEM_ALERT_WINDOW` grant did not take; check `adb shell appops get com.jamframe.tv` |
+| Leaves a **film alone** | Play something in an app, start music | `Watch.free()` reads the front app from usage events; check the `GET_USAGE_STATS` grant |
+| Opens from the **screensaver** | Let the screensaver start, start music | `ACTION_DREAMING_STARTED` may not be sent on this TV |
+| **Wakes** a sleeping TV | TV in standby, start music | Standby may cut Wi-Fi or stop the service; may need "quick start"/network standby on |
+| Closes when the music stops | Stop music, wait the grace time | — |
+| Stays away after Home/Back is pressed | Press Home during music | — |
+| Starts again after the TV restarts | Unplug, plug in, start music | Boot receiver blocked until the app is opened once |
+
+## Decisions waiting on the TV
+
+- **Putting the TV back to sleep** after it was woken for music is not built. The app only closes its screen
+  and lets the TV's own sleep timer take over. Doing it properly needs device-admin rights (as BetterFrame
+  uses); decide once we see how the TV behaves.
+- **Backlight**: the page dims the picture, not the panel. See whether the QM6K's own picture settings or
+  light sensor are enough.
+
+## The two art TVs (65A400U, 75A300L)
+
+These take the other route: BetterFrame's art mode, installed by `scripts/install-betterframe.sh`, with the
+TV's address entered on the room's row. Also never run on a real TV. Before installing:
+
+1. Same debugging steps as above, per TV.
+2. Confirm the 75's exact model on its label: no "75A300L" turned up in searches, only 75A300W.
+3. BetterFrame was only tested by its author on the A400 Pro. Its backlight control uses a TCL-internal
+   service that may differ per model: check it on each TV before relying on it.
+4. BetterFrame has no license. We install it unmodified from its own repository and copy none of its code.
+
+If BetterFrame does not work on one of them, the JamFrame TV app is the fallback for that TV too.

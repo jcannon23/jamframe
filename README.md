@@ -1,0 +1,135 @@
+<p align="center"><img src="docs/icon.png" width="128" alt="JamFrame icon"></p>
+<h1 align="center">JamFrame</h1>
+<p align="center">Your TV's art mode, showing the record that's playing.</p>
+
+When music plays on a Sonos speaker, the TV in that room shows the album cover as a muted, matted print,
+like the rest of the art on the wall. When the music stops, the TV goes back to what it was showing.
+
+![A cover as JamFrame shows it: faded, on a paper mat](docs/example.jpg)
+
+## What it does
+
+- **Follows each room on its own.** Music in the game room changes the game room TV only. Rooms grouped in
+  Sonos show the same cover.
+- **Makes covers look like prints.** Less colour and contrast, a warm cast, a paper mat tinted by the cover,
+  a soft shadow and paper grain.
+- **Animates between covers.** Five changes: Develop (a darkroom print coming up), Dissolve, Ink bleed,
+  Sleeve (the cover slides out of the mat) and Fade. Rotate through them, shuffle, or pin one.
+- **Captions the print.** Song, artist and album under the cover, like a gallery label.
+- **Shows lyrics, if you want them.** Four styles: large and faint either side of the cover, a column in the
+  margin, a single line, or typed out as it's sung.
+- **Sends sound waves off the cover.** Five styles, each song with its own pulse. Drawn, not heard: the
+  screen has no microphone.
+- **Stays out of the way.** Never takes the screen from someone watching TV, ignores the TV's own sound,
+  dims at night, and stays dark during quiet hours.
+
+## How it works
+
+```
+Sonos speaker ──▶ watch.py (any always-on computer) ──▶ the TV in that room
+  what's playing     picks the cover, serves the screens    shows it
+```
+
+`watch.py` asks each Sonos room what it is playing every few seconds. For each room it serves a full-screen
+page at `http://<this-computer>:8765/?room=<room name>` that draws the mat, cover, caption and lyrics, and
+animates when the album changes. Open that page on anything with a browser to see a room's screen.
+
+For TVs running [BetterFrame](https://github.com/spinogrizz/betterframe) (a replacement art mode with a local
+upload API), it also uploads a finished 4K still of the cover and switches the TV to it.
+
+## Quick start
+
+```sh
+git clone https://github.com/jcannon23/jamframe.git && cd jamframe
+python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
+.venv/bin/python watch.py
+```
+
+Then open `http://localhost:8765/settings`, add a room under **Rooms** using its name exactly as the Sonos
+app shows it, and play something. The preview at the top of the page is that room's screen.
+
+On a Mac, `scripts/install-mac.sh` makes it permanent: a login service keeps the watcher running, and
+`~/Applications/JamFrame.app` starts it if needed and opens the settings page. `scripts/install-mac.sh remove`
+undoes both.
+
+## Settings
+
+Everything is adjusted at `http://<this-computer>:8765/settings`, from a phone or a computer. Changes save as
+you make them and reach the screens within a few seconds.
+
+| Section | Controls |
+|---|---|
+| Preview | A live copy of the room's screen, and what the room is doing |
+| Cover change | Style, length, and **Play it now** to try one |
+| Print | Fading, cover size, mat (paper, white, charcoal, or tinted by the cover), grain |
+| Caption | On or off; song, artist, album; position; size |
+| Lyrics | Off, Backdrop, Margin, Line, Typewriter |
+| Sound waves | Off, Ripples, Grooves, Pressed, Rays, Strings; strength |
+| Screen | Brightness, dimming at night, burn-in shift |
+| When the music stops | How long to wait, then black, the last cover (with the time in a corner), or a clock in one of four faces |
+| Weather | On or off, place, °F or °C; shown with the clock and the kept cover |
+| Quiet hours | Hours in which nothing is shown |
+| Rooms | Sonos room name and the address of its TV; status of each |
+| Never show | Line-in and radio stations |
+| PIN | Optional, for changing settings |
+
+**Per room:** pick a room at the top of the page and anything you change applies to that room only. The
+bedroom can be dimmer and slower than the playroom.
+
+Settings live in `settings.json` next to the code; the page is the easier way to edit it.
+
+## Lyrics
+
+Lyrics come from [LRCLIB](https://lrclib.net), a free lyrics database. When lyrics are on, the song, artist
+and album names are sent there to look them up; nothing else is. Songs with timed lyrics follow the music
+line by line. Songs with only plain lyrics are spread evenly over the song, which is close but not exact.
+Songs it does not know show none.
+
+Weather comes from [Open-Meteo](https://open-meteo.com), also free and without an account. It is sent the place
+name you typed, then that place's coordinates.
+
+## TVs
+
+| Screen | How | Status |
+|---|---|---|
+| Anything with a browser | Open the room's page full screen | Works |
+| A regular Google TV | The **JamFrame TV app** (`tv/`): opens the room's page by itself when music starts, and only when nobody is using the TV | Written and builds; not yet run on a TV |
+| A TCL art TV | [BetterFrame](https://github.com/spinogrizz/betterframe)'s art mode, fed finished stills | Written and checked against a stand-in TV; not yet run on a real one |
+
+`scripts/install-tv.sh <TV address> "<Sonos room>"` builds and installs the TV app.
+`scripts/install-betterframe.sh` installs BetterFrame, unmodified, from its own repository. Both need USB
+debugging turned on at the TV. What is left to prove on real TVs is listed in
+[docs/when-the-85QM6K-arrives.md](docs/when-the-85QM6K-arrives.md).
+
+## In the box
+
+| File | Does |
+|---|---|
+| `watch.py` | Follows the Sonos rooms and drives their screens |
+| `display.py` | Serves the room pages and the settings page; holds every setting and its limits |
+| `display/index.html` | A room's screen: mat, cover, caption, lyrics, the changes between covers |
+| `display/settings.html` | The settings page |
+| `treat.py` | Cover in, finished 4K print out: `python treat.py cover.jpg out.jpg` |
+| `check.py` | Checks the lot against a stand-in TV: `python check.py` |
+| `tv/` | The JamFrame TV app for Google TVs |
+| `scripts/` | Installers for the Mac, the TV app and BetterFrame; the TV app's build; the icon's drawing |
+
+Try the screens without Sonos: `python display.py one.jpg two.jpg` cycles through your own pictures.
+
+## Good to know
+
+- The computer running `watch.py` has to stay awake, and on the same network as the speakers and TVs.
+- Give that computer and each TV a fixed address in your router, so the addresses in the settings stay right.
+- The settings page has no password unless you set a PIN. The PIN is a courtesy lock for a home network: it
+  travels unencrypted and is stored in `settings.json`.
+
+## Thanks
+
+[SoCo](https://github.com/SoCo/SoCo) for talking to Sonos, [BetterFrame](https://github.com/spinogrizz/betterframe)
+for the art mode,
+[LRCLIB](https://lrclib.net) for the lyrics and [Open-Meteo](https://open-meteo.com) for the weather.
+
+## License
+
+[MIT](LICENSE): use it, change it, share it. BetterFrame is a separate project with its own terms; none of its
+code is in this repository.

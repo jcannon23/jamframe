@@ -1,0 +1,547 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>JamFrame</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #000; overflow: hidden; cursor: none; }
+  canvas { width: 100vw; height: 100vh; display: block; }
+  #w { position: fixed; top: 0; left: 0; pointer-events: none; }
+  /* Caption under the cover, like the label of a print. --s is the cover's edge, --f the text scale. */
+  #cap { position: fixed; left: calc(50vw - var(--s) / 2); width: var(--s); top: calc(50vh + var(--s) / 2 + 2.2vh);
+         opacity: 0; transition: opacity 0.9s, color 2s; font-family: "Iowan Old Style", Palatino, Georgia, serif;
+         font-size: calc(var(--f) * 1vh); text-align: center; }
+  #cap div { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #title { font-size: 2.3em; }
+  #by { font-size: 1.6em; margin-top: 0.4em; font-style: italic; opacity: 0.8; }
+  /* The song's words, in the style the settings page picked (class on #lyr). */
+  #lyr { position: fixed; inset: 0; pointer-events: none; opacity: 0; transition: opacity 1.5s, color 2s;
+         font-family: "Iowan Old Style", Palatino, Georgia, serif; }
+  #lyr .big { position: absolute; top: 50%; transform: translateY(-50%); width: calc(50vw - var(--s) / 2 - 9vh);
+              font-size: 7.5vh; line-height: 1.12; font-style: italic; opacity: 0; transition: opacity 0.45s;
+              text-shadow: 0 0.12vh 0 rgba(255, 255, 255, 0.25); }                 /* pressed into the paper */
+  #lyr .big.l { left: 4vh; text-align: right; }
+  #lyr .big.r { right: 4vh; text-align: left; }
+  #lyr .col { position: absolute; left: 3vw; width: calc(50vw - var(--s) / 2 - 7vw); top: 0; bottom: 0; overflow: hidden;
+              -webkit-mask-image: linear-gradient(transparent 8%, #000 35%, #000 65%, transparent 92%);
+              mask-image: linear-gradient(transparent 8%, #000 35%, #000 65%, transparent 92%); }
+  #lyr .roll { position: absolute; left: 0; right: 0; top: 50%; transition: transform 0.8s ease; }
+  #lyr .roll div { font-size: 2vh; line-height: 1.45; padding: 0.6vh 0; min-height: 2.9vh; text-align: right;
+                   opacity: 0.28; transition: opacity 0.8s; }
+  #lyr .roll div.on { opacity: 1; }
+  #lyr .one { position: absolute; left: 6vw; right: 6vw; bottom: calc(50vh + var(--s) / 2 + 3vh); text-align: center;
+              font-size: 2.6vh; font-style: italic; opacity: 0; transition: opacity 0.45s; }
+  #lyr.typewriter .one { font-family: "American Typewriter", "Courier New", monospace; font-style: normal;
+                         letter-spacing: 0.03em; transition: none; }
+  /* With no music: a clock (faces by class), today's date and the weather. */
+  #clock { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+           opacity: 0; transition: opacity 2s, color 2s; font-family: "Iowan Old Style", Palatino, Georgia, serif; }
+  #clock .time { font-size: 20vh; line-height: 1; }
+  #clock .date { font-size: 3vh; margin-top: 2.5vh; opacity: 0.75; }
+  #clock .wx { font-size: 2.6vh; margin-top: 2vh; opacity: 0.75; }
+  #clock.modern { font-family: "Helvetica Neue", Roboto, Arial, sans-serif; }
+  #clock.modern .time { font-size: 27vh; font-weight: 200; letter-spacing: -0.02em; }
+  #clock.modern .date, #clock.modern .wx { text-transform: uppercase; letter-spacing: 0.22em; font-size: 2.1vh; }
+  #clock.words .time { font-size: 9vh; font-style: italic; line-height: 1.15; text-align: center; max-width: 80vw; }
+  #clock.analog .time { width: 46vh; height: 46vh; }
+  svg.sky { width: 1.25em; height: 1.25em; vertical-align: -0.28em; margin-right: 0.35em; fill: none; stroke: currentColor;
+            stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+  /* The time and weather in a corner, while a cover is kept up after the music. */
+  #corner { position: fixed; top: 4.5vh; right: 5.5vh; text-align: right; opacity: 0; transition: opacity 2s, color 2s;
+            font-family: "Iowan Old Style", Palatino, Georgia, serif; }
+  #corner .time { font-size: 4.4vh; line-height: 1.1; }
+  #corner .wx { font-size: 2.2vh; margin-top: 0.6vh; opacity: 0.8; }
+</style>
+<canvas id="c"></canvas>
+<canvas id="w"></canvas>
+<div id="cap"><div id="title"></div><div id="by"></div></div>
+<div id="lyr"></div>
+<div id="clock"><div class="time"></div><div class="date"></div><div class="wx"></div></div>
+<div id="corner"><div class="time"></div><div class="wx"></div></div>
+<script>
+// The now-playing cover of one room (?room=<Sonos room>) as a matted print. Polls ./state and animates
+// from the old cover to the new one with the transition the server picked for this track.
+// How it looks comes with the state too ("look", set on the settings page) and applies as it changes.
+const cv = document.getElementById('c'), g = cv.getContext('2d');
+const cap = document.getElementById('cap'), clock = document.getElementById('clock'), lyr = document.getElementById('lyr');
+const corner = document.getElementById('corner');
+const MATS = { paper: [232, 226, 215], white: [240, 239, 235], charcoal: [46, 44, 41] }, SHADE = [60, 54, 46];
+const SIZES = { small: 0.8, medium: 1, large: 1.3 };
+let look = { caption: true, align: 'center', fields: ['title', 'artist', 'album'], size: 'medium', mute: 0.5,
+             mat: 'paper', cover: 0.62, grain: true, shift: false, idle: 'black', brightness: 1, lyrics: 'off', clock: 'classic', waves: 'off', wave_level: 0.6 };
+let W, H, S, X, Y;          // canvas size, cover edge, cover position
+let ox = 0, oy = 0;         // burn-in shift, as a share of screen height
+
+function resize() {
+  const scale = Math.min(devicePixelRatio || 1, 1920 / innerWidth);   // 1080p is plenty for a TV chip
+  W = cv.width = Math.round(innerWidth * scale);
+  H = cv.height = Math.round(innerHeight * scale);
+  S = Math.round(H * look.cover); X = Math.round((W - S) / 2 + ox * H); Y = Math.round((H - S) / 2 + oy * H);
+  document.documentElement.style.setProperty('--s', look.cover * 100 + 'vh');
+  cap.style.transform = clock.style.transform = corner.style.transform = `translate(${ox * 100}vh, ${oy * 100}vh)`;
+}
+
+const rgb = c => `rgb(${c[0]},${c[1]},${c[2]})`;
+const mix = (a, b, t) => a.map((v, i) => Math.round(v + (b[i] - v) * t));
+const smooth = v => { v = Math.max(0, Math.min(1, v)); return v * v * (3 - 2 * v); };
+const canvas = (w, h) => Object.assign(document.createElement('canvas'), { width: w, height: h });
+const paper = () => MATS[look.mat] || MATS.paper;
+const ink = bg => bg[0] * 0.3 + bg[1] * 0.59 + bg[2] * 0.11 < 110 ? 'rgba(236,230,220,0.8)' : 'rgba(60,54,46,0.78)';
+
+// Paper grain, drawn over mat and cover alike.
+const grain = canvas(256, 256);
+{
+  const x = grain.getContext('2d'), d = x.createImageData(256, 256);
+  for (let i = 0; i < d.data.length; i += 4) {
+    d.data[i] = d.data[i + 1] = d.data[i + 2] = 128 + (Math.random() - 0.5) * 110;
+    d.data[i + 3] = 255;
+  }
+  x.putImageData(d, 0, 0);
+}
+
+// A cover ready to draw: muted like a print (less colour and contrast, warm cast), plus its mat colour.
+async function load(url) {
+  const img = new Image();
+  img.src = url;
+  await img.decode();
+  const c = canvas(S, S), x = c.getContext('2d'), m = look.mute;
+  x.filter = `saturate(${100 - 90 * m}%) contrast(${100 - 36 * m}%)`;
+  x.drawImage(img, 0, 0, S, S);
+  x.filter = 'none';
+  x.fillStyle = `rgba(128,120,108,${0.16 * m})`; x.fillRect(0, 0, S, S);
+  x.fillStyle = `rgba(255,236,205,${0.12 * m})`; x.fillRect(0, 0, S, S);
+  const tiny = canvas(16, 16), tx = tiny.getContext('2d');
+  tx.drawImage(c, 0, 0, 16, 16);
+  const px = tx.getImageData(0, 0, 16, 16).data, avg = [0, 0, 0];
+  for (let i = 0; i < px.length; i += 4) for (let k = 0; k < 3; k++) avg[k] += px[i + k] / 256;
+  const m2 = look.mat === 'cover' ? mix(MATS.paper, avg, 0.55) : mix(paper(), avg, 0.12);
+  const dark = m2[0] * 0.3 + m2[1] * 0.59 + m2[2] * 0.11 < 110;      // waves take the cover's colour, as ink on this mat
+  return { url, img: c, mat: m2, wave: dark ? mix(avg, [236, 230, 220], 0.55) : mix(avg, [40, 36, 30], 0.5) };
+}
+
+function mat(color) {
+  g.fillStyle = rgb(color); g.fillRect(0, 0, W, H);
+  g.shadowColor = 'rgba(40,36,30,0.4)'; g.shadowBlur = H * 0.017; g.shadowOffsetY = H * 0.005;
+  g.fillRect(X, Y, S, S);
+  g.shadowColor = 'transparent';
+}
+
+function scene(c) { mat(c.mat); g.drawImage(c.img, X, Y); }
+
+// The screen with no music: black, or an empty mat for the clock to sit on.
+const idleColor = () => look.idle === 'clock' ? paper() : [0, 0, 0];
+function blank() { g.fillStyle = rgb(idleColor()); g.fillRect(0, 0, W, H); }
+
+// Ink bleed: a field of noise plus distance from a random origin; the new cover shows where the
+// rising threshold has passed. Rebuilt per transition so every bleed starts somewhere else.
+const F = 256, field = new Float32Array(F * F);
+const mask = canvas(F, F), maskX = mask.getContext('2d'), maskData = maskX.createImageData(F, F);
+let layer;   // the new cover cut out by the mask
+function newField() {
+  const G = 12, grid = Array.from({ length: (G + 1) * (G + 1) }, Math.random);
+  const ox = Math.random() * F, oy = Math.random() * F;
+  let max = 0;
+  for (let y = 0; y < F; y++) for (let x = 0; x < F; x++) {
+    const fx = x / F * G, fy = y / F * G, ix = fx | 0, iy = fy | 0;
+    const ux = smooth(fx - ix), uy = smooth(fy - iy), r = iy * (G + 1) + ix;
+    const n = grid[r] + (grid[r + 1] - grid[r]) * ux + (grid[r + G + 1] - grid[r]) * uy
+            + (grid[r] - grid[r + 1] - grid[r + G + 1] + grid[r + G + 2]) * ux * uy;
+    const v = Math.hypot(x - ox, y - oy) / F * 0.75 + n * 0.35;
+    field[y * F + x] = v; if (v > max) max = v;
+  }
+  for (let i = 0; i < F * F; i++) field[i] /= max;
+}
+
+// Each transition draws the cover area for progress t (0..1); the mat has already been drawn.
+const TRANSITIONS = {
+  inmat(a, b, t) {
+    g.drawImage(a.img, X, Y);
+    g.globalAlpha = smooth(t); g.drawImage(b.img, X, Y);
+  },
+  develop(a, b, t) {     // old print lifts out, new one comes up pale and sepia, then gains contrast
+    const out = smooth(t / 0.35), up = smooth((t - 0.35) / 0.65);
+    g.fillStyle = rgb(mix(mix(a.mat, b.mat, smooth(t)), SHADE, 0.12)); g.fillRect(X, Y, S, S);
+    g.globalAlpha = 1 - out; g.drawImage(a.img, X, Y);
+    g.globalAlpha = Math.min(1, up * 1.6);
+    g.filter = `contrast(${40 + 60 * up}%) brightness(${150 - 50 * up}%) sepia(${60 * (1 - up)}%)`;
+    g.drawImage(b.img, X, Y);
+  },
+  ink(a, b, t) {
+    const d = maskData.data, th = t * 1.15;
+    for (let i = 0; i < F * F; i++) {
+      const k = (th - field[i]) / 0.1;
+      d[i * 4 + 3] = k <= 0 ? 0 : k >= 1 ? 255 : k * 255;
+    }
+    maskX.putImageData(maskData, 0, 0);
+    const x = layer.getContext('2d');
+    x.globalCompositeOperation = 'source-over'; x.clearRect(0, 0, S, S); x.drawImage(b.img, 0, 0);
+    x.globalCompositeOperation = 'destination-in'; x.drawImage(mask, 0, 0, S, S);
+    g.drawImage(a.img, X, Y); g.drawImage(layer, X, Y);
+  },
+  sleeve(a, b, t) {      // old cover slides out of the mat opening, new one follows it in
+    const e = smooth(t);
+    g.save(); g.beginPath(); g.rect(X, Y, S, S); g.clip();
+    g.fillStyle = rgb(mix(b.mat, SHADE, 0.12)); g.fillRect(X, Y, S, S);
+    g.drawImage(a.img, X + e * S * 1.04, Y); g.drawImage(b.img, X - (1 - e) * S * 1.04, Y);
+    g.restore();
+  },
+};
+
+// One frame of going from cover a to cover b. Either may be null (no music).
+function frame(a, b, name, t) {
+  g.globalAlpha = 1; g.filter = 'none';
+  if (a && b && TRANSITIONS[name]) {
+    mat(mix(a.mat, b.mat, smooth(t)));
+    TRANSITIONS[name](a, b, t);
+  } else {                                   // "fade", or music starting / stopping
+    a ? scene(a) : blank();
+    g.globalAlpha = smooth(t);
+    b ? scene(b) : blank();
+  }
+  g.globalAlpha = 0.05; g.filter = 'none';
+  if (look.grain) { g.fillStyle = g.createPattern(grain, 'repeat'); g.fillRect(0, 0, W, H); }
+  g.globalAlpha = 1;
+}
+
+function run(a, b, name, seconds) {
+  if (name === 'ink') { newField(); layer = canvas(S, S); }
+  return new Promise(done => {
+    const start = performance.now();
+    (function tick(now) {
+      const t = Math.min(1, (now - start) / (seconds * 1000));
+      frame(a, b, name, t);
+      t < 1 ? requestAnimationFrame(tick) : done();
+    })(start);
+  });
+}
+
+let shown = null, shownArt = null, wanted = { art: null }, busy = false;
+let played, stale = false;   // last "play it now" seen; look changed while a transition was running
+
+// What is up now, drawn still. Text takes a colour that reads on the mat behind it.
+function still() {
+  frame(null, shown, 'fade', 1);
+  cap.style.color = clock.style.color = lyr.style.color = corner.style.color = ink(shown ? shown.mat : idleColor());
+  const halo = rgb(shown ? shown.mat : idleColor());                 // keeps waves from running through the caption
+  cap.style.textShadow = look.waves === 'off' ? '' : `0 0 0.6vh ${halo}, 0 0 1.2vh ${halo}, 0 0 2vh ${halo}`;
+  lyr.style.opacity = shown ? 1 : 0;
+  tick();
+}
+
+// ---- Clock and weather. Faces: classic (serif numerals), modern (thin and wide), analog (a dial), words.
+const SKY = {     // drawn on a 24 x 24 grid, in the text's colour
+  clear: '<circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2.5M12 19v2.5M2.5 12H5M19 12h2.5M5.3 5.3l1.8 1.8M16.9 16.9l1.8 1.8M5.3 18.7l1.8-1.8M16.9 7.1l1.8-1.8"/>',
+  moon: '<path d="M19.5 14.5A8 8 0 0 1 9.5 4.5a8 8 0 1 0 10 10z"/>',
+  partly: '<circle cx="8" cy="8" r="3"/><path d="M8 2.2v1.6M2.2 8h1.6M3.9 3.9l1.1 1.1M12.1 3.9L11 5M8.5 19h9a3.5 3.5 0 0 0 .4-7 5 5 0 0 0-9.6 1.3A2.9 2.9 0 0 0 8.5 19z"/>',
+  cloud: '<path d="M7 18.5h10a4 4 0 0 0 .5-8 6 6 0 0 0-11.5 1.6A3.3 3.3 0 0 0 7 18.5z"/>',
+  fog: '<path d="M7 13.5h10a4 4 0 0 0 .5-8A6 6 0 0 0 6 7.1a3.3 3.3 0 0 0 1 6.4zM4 17h16M6.5 20.5h11"/>',
+  rain: '<path d="M7 14.5h10a4 4 0 0 0 .5-8A6 6 0 0 0 6 8.1a3.3 3.3 0 0 0 1 6.4zM8.5 17.5l-1 3M12.5 17.5l-1 3M16.5 17.5l-1 3"/>',
+  snow: '<path d="M7 14.5h10a4 4 0 0 0 .5-8A6 6 0 0 0 6 8.1a3.3 3.3 0 0 0 1 6.4zM8 18.3v.1M12 18.3v.1M16 18.3v.1M10 21.2v.1M14 21.2v.1"/>',
+  storm: '<path d="M7 14.5h10a4 4 0 0 0 .5-8A6 6 0 0 0 6 8.1a3.3 3.3 0 0 0 1 6.4zM12.5 15.5l-2.5 3.5h3l-2 3.2"/>',
+};
+const HOURS = ['twelve', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven'];
+const PAST = ['', 'five past', 'ten past', 'quarter past', 'twenty past', 'twenty-five past', 'half past',
+              'twenty-five to', 'twenty to', 'quarter to', 'ten to', 'five to'];
+
+function inWords(d) {
+  const five = Math.round((d.getHours() * 60 + d.getMinutes()) / 5), part = five % 12, hour = Math.floor(five / 12) + (part > 6 ? 1 : 0);
+  return part ? `${PAST[part]} ${HOURS[hour % 12]}` : `${HOURS[hour % 12]} o\u2019clock`;
+}
+
+function dial(d) {
+  const hand = (turn, length, width) => `<line x1="50" y1="50" x2="50" y2="${50 - length}" stroke-width="${width}" transform="rotate(${turn * 360} 50 50)"/>`;
+  let marks = '';
+  for (let i = 0; i < 12; i++) marks += `<line x1="50" y1="${i % 3 ? 5 : 4}" x2="50" y2="${i % 3 ? 8 : 10}" stroke-width="${i % 3 ? 0.6 : 1.1}" transform="rotate(${i * 30} 50 50)"/>`;
+  const m = d.getMinutes() / 60, h = (d.getHours() % 12 + m) / 12;
+  return `<svg viewBox="0 0 100 100" fill="none" stroke="currentColor" stroke-linecap="round"><circle cx="50" cy="50" r="48" stroke-width="0.7"/>${marks}${hand(h, 26, 2)}${hand(m, 38, 1.2)}<circle cx="50" cy="50" r="1.6" fill="currentColor"/></svg>`;
+}
+
+// Our own markup only: the weather's words are set as text.
+function weatherInto(el, long) {
+  const w = wanted.weather;
+  el.replaceChildren();
+  if (!w || w.error) return;
+  el.insertAdjacentHTML('beforeend', `<svg class="sky" viewBox="0 0 24 24">${SKY[w.sky === 'clear' && w.night ? 'moon' : w.sky] || SKY.cloud}</svg>`);
+  el.append(long ? `${w.temp}\u00b0  ${w.text}  \u00b7  ${w.high}\u00b0 / ${w.low}\u00b0` : `${w.temp}\u00b0 ${w.text}`);
+}
+
+function tick() {
+  const now = new Date(), time = now.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  const face = clock.querySelector('.time');
+  clock.className = look.clock;
+  if (look.clock === 'analog') face.innerHTML = dial(now);
+  else face.textContent = look.clock === 'words' ? inWords(now) : look.clock === 'modern' ? time.replace(/\s?[AP]M/i, '') : time;
+  clock.querySelector('.date').textContent = now.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' });
+  weatherInto(clock.querySelector('.wx'), true);
+  clock.style.opacity = !shown && !busy && look.idle === 'clock' ? 1 : 0;
+  corner.querySelector('.time').textContent = time;
+  weatherInto(corner.querySelector('.wx'), false);
+  corner.style.opacity = shown && !busy && !wanted.art && look.idle === 'last' ? 1 : 0;
+}
+
+// The caption fades out, changes, and fades back in. Hidden while a cover is animating.
+let capKey = '';
+function label(w) {
+  const has = f => look.fields.includes(f) && w[f];
+  const title = has('title') || '', by = [has('artist'), has('album')].filter(Boolean).join(' \u2014 ');
+  const key = w.art && look.caption ? title + '\n' + by : '';
+  if (key === capKey && (!key.trim() || cap.style.opacity === '1')) return;
+  capKey = key; cap.style.opacity = 0;
+  setTimeout(() => {
+    if (capKey !== key || busy) return;
+    document.getElementById('title').textContent = title;
+    document.getElementById('by').textContent = by;
+    cap.style.opacity = key.trim() ? 1 : 0;
+  }, 900);
+}
+
+// ---- Lyrics. lines: [[seconds, text], ...] of the song playing; at(): seconds into it, by our own clock
+// since the server last told us. Styles: backdrop (large and faint either side of the cover), margin (a column
+// beside it, like a poem printed next to the picture), line (one line above it), typewriter (typed out).
+let lines = null, linesKey = '', line = -2, basePos = null, baseAt = 0, swapping = 0;
+
+// Backdrop: a line is cut in two at the word nearest its middle, one half for each side of the cover.
+function halves(text) {
+  const words = text.split(' ');
+  let k = 1, best = Infinity;
+  for (let i = 1; i < words.length; i++) {
+    const d = Math.abs(words.slice(0, i).join(' ').length - text.length / 2);
+    if (d < best) { best = d; k = i; }
+  }
+  return [words.slice(0, k).join(' '), words.slice(k).join(' ')];
+}
+
+const at = () => basePos + (performance.now() - baseAt) / 1000;    // seconds into the song, by our own clock
+
+function setLyrics() {
+  const has = look.lyrics !== 'off' && wanted.art && wanted.lyrics || null;
+  if (wanted.position == null) basePos = null;
+  else {
+    const mine = basePos === null ? null : at(), off = mine === null ? 99 : wanted.position - mine;
+    basePos = Math.abs(off) > 1.5 ? wanted.position : mine + off * 0.15; baseAt = performance.now();
+  }
+  const key = look.lyrics + '|' + wanted.art + '|' + wanted.title + '|' + (has ? has.length : 0);
+  if (key === linesKey) return;
+  linesKey = key; lines = has; line = -2;
+  lyr.className = look.lyrics;
+  const div = (cls, ...kids) => { const e = document.createElement('div'); e.className = cls; e.append(...kids); return e; };
+  if (!has) lyr.replaceChildren();
+  else if (look.lyrics === 'margin') lyr.replaceChildren(div('col', div('roll', ...has.map(l => div('', l[1])))));
+  else if (look.lyrics === 'backdrop') lyr.replaceChildren(div('big l'), div('big r'));
+  else lyr.replaceChildren(div('one'));
+}
+
+function lyricTick() {
+  if (!lines || basePos === null) return;                // nothing to show, or paused: leave it as it is
+  const pos = at() + 0.3;
+  let i = -1;
+  while (i + 1 < lines.length && lines[i + 1][0] <= pos) i++;
+  const text = i < 0 ? '' : lines[i][1], el = lyr.firstChild;
+  if (look.lyrics === 'typewriter') {                    // typed over the first part of the line's time
+    const until = i + 1 < lines.length ? lines[i + 1][0] : pos + 4;
+    const span = Math.max(0.3, Math.min((until - (i < 0 ? 0 : lines[i][0])) * 0.6, text.length * 0.07));
+    const n = i < 0 ? 0 : Math.min(text.length, Math.ceil(text.length * (pos - lines[i][0]) / span));
+    el.textContent = text.slice(0, n) + (n < text.length ? '\u258d' : '');
+    el.style.opacity = 1;
+  } else if (i !== line) {
+    if (look.lyrics === 'margin') {
+      const rows = el.firstChild.children, on = rows[Math.max(i, 0)];
+      for (let k = 0; k < rows.length; k++) rows[k].classList.toggle('on', k === i);
+      el.firstChild.style.transform = `translateY(${-(on.offsetTop + on.offsetHeight / 2)}px)`;
+    } else {                                             // backdrop, line: fade out, change, fade in
+      const mine = ++swapping, back = look.lyrics === 'backdrop', parts = back ? halves(text) : [text];
+      const els = [...lyr.children];
+      els.forEach(e => { e.style.opacity = 0; });
+      setTimeout(() => { if (mine !== swapping || !el.isConnected) return;
+                         els.forEach((e, k) => { e.textContent = parts[k]; e.style.opacity = text ? (back ? 0.2 : 0.9) : 0; }); }, 450);
+    }
+  }
+  line = i;
+}
+
+// ---- Sound waves, on their own canvas over the mat (the cover's square is cut out of it).
+// Nothing here hears the music. Each song gets a tempo and a character from its name, and beats are counted
+// from the song's position, so the waves keep time with themselves, differ song to song, and stop on pause.
+const wv = document.getElementById('w'), wg = wv.getContext('2d');
+let level = 0, lastWave = 0, song = { key: '', bpm: 100, seed: 1 };
+
+function hash(text) { let h = 2166136261; for (const ch of text) h = Math.imul(h ^ ch.charCodeAt(0), 16777619); return h >>> 0; }
+const rnd = n => { const x = Math.sin(n * 127.1 + song.seed) * 43758.5453; return x - Math.floor(x); };
+
+// The beats still travelling outward: how long ago each was, and how hard it hit (bars of four, with phrasing).
+function beats(pos, count) {
+  const beat = 60 / song.bpm, last = Math.floor(pos / beat), out = [];
+  for (let k = last; k > last - count && k >= 0; k--) {
+    const accent = k % 4 === 0 ? 1 : k % 4 === 2 ? 0.62 : 0.3;
+    out.push({ age: pos - k * beat, power: accent * (0.5 + 0.5 * rnd(Math.floor(k / 8))) });
+  }
+  return out;
+}
+
+// The cover's outline grown outward by d: square at the cover, rounder the further it has travelled.
+function ring(d) {
+  const x = X - d, y = Y - d, s = S + 2 * d, r = Math.min(d * 0.9, s / 2);
+  wg.beginPath(); wg.moveTo(x + r, y);
+  wg.arcTo(x + s, y, x + s, y + s, r); wg.arcTo(x + s, y + s, x, y + s, r);
+  wg.arcTo(x, y + s, x, y, r); wg.arcTo(x, y, x + s, y, r);
+  wg.closePath();
+}
+
+const WAVES = {
+  ripples(pos, reach, speed, k) {            // one thin ring per beat, fading as it crosses the mat
+    for (const b of beats(pos, 16)) {
+      const d = b.age * speed;
+      if (d > reach) continue;
+      const fade = Math.pow(1 - d / reach, 1.5);
+      wg.lineWidth = H * 0.0014 * (1 + b.power * 1.6);
+      wg.globalAlpha = Math.min(1, b.power * fade * 1.5 * k); ring(d); wg.stroke();
+      if (b.power > 0.45 && d > H * 0.02) { wg.globalAlpha *= 0.35; wg.lineWidth *= 0.6; ring(d - H * 0.011); wg.stroke(); }
+    }
+  },
+  grooves(pos, reach, speed, k) {            // a record's grooves around the cover; each beat squeezes through them
+    const gap = H * 0.015, hits = beats(pos, 16);
+    wg.lineWidth = H * 0.0011;
+    for (let d = gap; d < reach; d += gap) {
+      let shift = 0, glow = 0;
+      for (const b of hits) {
+        const x = (d - b.age * speed) / (H * 0.045), g = Math.exp(-x * x) * b.power;
+        shift -= x * g * H * 0.016; glow += g;
+      }
+      wg.globalAlpha = Math.min(1, (0.1 + 0.55 * glow) * Math.pow(1 - d / reach, 1.1) * k * 1.4);
+      ring(Math.max(0.5, d + shift * k * 1.4)); wg.stroke();
+    }
+  },
+  emboss(pos, reach, speed, k) {             // ridges pressed into the paper: a shadow line under a lit one
+    const lift = H * 0.0016;
+    wg.lineWidth = H * 0.0038;
+    for (const b of beats(pos, 16)) {
+      const d = b.age * speed;
+      if (d > reach) continue;
+      const a = Math.min(1, b.power * Math.pow(1 - d / reach, 1.3) * k * 1.1);
+      wg.save(); wg.translate(0, lift); wg.strokeStyle = 'rgb(40,36,30)'; wg.globalAlpha = a * 0.5; ring(d); wg.stroke(); wg.restore();
+      wg.save(); wg.translate(0, -lift); wg.strokeStyle = 'rgb(255,255,255)'; wg.globalAlpha = a * 0.75; ring(d); wg.stroke(); wg.restore();
+    }
+  },
+  rays(pos, reach, speed, k) {               // a halo of fine marks round the cover, rising and falling like a meter
+    const hit = beats(pos, 3).reduce((m, b) => Math.max(m, b.power * Math.exp(-b.age * 5)), 0);
+    const n = 46, gap = H * 0.014;
+    wg.lineWidth = H * 0.0021; wg.globalAlpha = Math.min(1, 0.75 * k + 0.1);
+    wg.beginPath();
+    for (let side = 0; side < 4; side++) for (let i = 0; i < n; i++) {
+      if (side === 2 && look.caption) continue;                         // the caption has the space under the cover
+      const u = (i + 0.5) / n, m = Math.abs(u - 0.5) * 2;               // m: mirrored, so each side is symmetrical
+      const band = (Math.sin(m * 7 + pos * 2.3 + side * 1.7) * 0.5 + 0.5) * (Math.sin(m * 19 - pos * 4.1 + rnd(side) * 6) * 0.5 + 0.5);
+      const len = H * (0.008 + (0.035 * hit + 0.11 * band * (0.45 + 0.55 * hit)) * k * (1 - m * 0.35));
+      const along = u * S, a = [X + along, Y - gap, 0, -1, X + S + gap, Y + along, 1, 0, X + S - along, Y + S + gap, 0, 1, X - gap, Y + S - along, -1, 0];
+      const px = a[side * 4], py = a[side * 4 + 1], dx = a[side * 4 + 2], dy = a[side * 4 + 3];
+      wg.moveTo(px, py); wg.lineTo(px + dx * len, py + dy * len);
+    }
+    wg.stroke();
+  },
+  strings(pos, reach, speed, k) {            // lines running out from both sides; beats travel along them as waves
+    const n = 11, step = H * 0.011, hits = beats(pos, 16), color = rgb(shown.wave);
+    wg.lineWidth = H * 0.0015;
+    for (const dir of [-1, 1]) {
+      const from = dir < 0 ? X - H * 0.012 : X + S + H * 0.012, far = dir < 0 ? 0 : W;
+      const fade = wg.createLinearGradient(from, 0, far, 0);
+      fade.addColorStop(0, color); fade.addColorStop(1, color.replace('rgb', 'rgba').replace(')', ',0)'));
+      wg.strokeStyle = fade; wg.globalAlpha = Math.min(1, 0.7 * k + 0.1);
+      for (let j = 0; j < n; j++) {
+        const y0 = Y + S * (j + 0.5) / n, weight = 0.35 + 0.65 * Math.sin(Math.PI * (j + 0.5) / n);
+        wg.beginPath();
+        for (let d = 0; d <= Math.abs(far - from); d += step) {
+          let amp = 0;
+          for (const b of hits) { const x = (d - b.age * speed * 1.5) / (H * 0.1); amp += b.power * Math.exp(-x * x); }
+          const y = y0 + amp * weight * H * 0.026 * k * Math.sin(d / (H * 0.028) - pos * 7 + j * 0.9);
+          d ? wg.lineTo(from + dir * d, y) : wg.moveTo(from, y);
+        }
+        wg.stroke();
+      }
+      wg.strokeStyle = color;
+    }
+  },
+};
+
+function waves(now) {
+  requestAnimationFrame(waves);
+  if (now - lastWave < 30) return;           // about 30 a second is plenty, and kind to a TV
+  lastWave = now;
+  const key = (wanted.title || '') + '|' + (wanted.artist || '');
+  if (key !== song.key) { const h = hash(key); song = { key, bpm: 84 + h % 44, seed: h % 997 }; }
+  const on = look.waves !== 'off' && shown && wanted.art && basePos !== null;
+  level += ((on ? 1 : 0) - level) * 0.05;    // ease in when music starts, settle when it pauses
+  if (wv.width !== W || wv.height !== H) { wv.width = W; wv.height = H; }
+  wg.clearRect(0, 0, W, H);
+  if (level < 0.01 || !shown || !WAVES[look.waves]) return;
+  wg.globalAlpha = 1; wg.lineCap = 'round'; wg.strokeStyle = rgb(shown.wave);
+  WAVES[look.waves](basePos === null ? performance.now() / 1000 : at(), Math.hypot(W, H) / 2 - S / 2, H * 0.12, level * look.wave_level * 1.5);
+  wg.globalAlpha = 1; wg.clearRect(X, Y, S, S);
+}
+requestAnimationFrame(waves);
+
+async function sync() {
+  if (busy || !S) return;                              // !S: window has no size yet, resize will call back
+  const want = wanted;
+  const demo = want.play !== played && played !== undefined && shown && want.demo;
+  played = want.play;
+  const keep = !want.art && look.idle === 'last' && shown;      // music over, cover stays up
+  if (!demo && (want.art === shownArt || keep)) return keep || label(want);
+  busy = true;
+  cap.style.opacity = 0; tick();
+  try {
+    if (demo) {                                        // "play it now": previous cover to this one, again
+      const from = want.from && want.from !== shownArt ? await load(want.from) : shown;
+      await run(from, shown, want.demo.transition, want.demo.seconds);
+    } else {
+      const next = want.art ? await load(want.art) : null;
+      await run(shown, next, want.transition, shown && next ? want.seconds : 3);
+      shown = next; shownArt = want.art;
+    }
+  } catch (e) {
+    console.error(e);
+    if (!demo) shownArt = want.art;   // a cover that won't load: keep what is up, wait for the next track
+  }
+  busy = false;
+  if (stale) await redo();
+  still();
+  sync();                    // the track may have changed again while this one was animating
+}
+
+// Mute, mat or cover size changed: the cover has to be prepared again.
+async function redo() {
+  if (busy) { stale = true; return; }
+  busy = true; stale = false;
+  resize();
+  try { if (shown) shown = await load(shown.url); } catch (e) { console.error(e); }
+  busy = false;
+  still();
+}
+
+async function poll() {
+  try {
+    wanted = await (await fetch('state' + location.search, { cache: 'no-store' })).json();
+    const old = look, differs = keys => keys.some(k => JSON.stringify(old[k]) !== JSON.stringify(look[k]));
+    look = Object.assign({}, look, wanted.look);
+    cap.style.textAlign = look.align;
+    cap.style.setProperty('--f', SIZES[look.size] || 1);
+    document.body.style.filter = `brightness(${look.brightness})`;
+    if (differs(['caption', 'fields'])) capKey = null;
+    if (differs(['waves']) && !busy) still();
+    setLyrics();
+    if (differs(['mute', 'mat', 'cover'])) await redo();
+    else if (differs(['grain', 'idle']) && !busy) still();
+    tick();
+    sync();
+  } catch (e) {}
+}
+
+// Burn-in: every few minutes the picture sits a few pixels somewhere else.
+setInterval(() => {
+  const was = [ox, oy];
+  [ox, oy] = look.shift ? [(Math.random() - 0.5) * 0.008, (Math.random() - 0.5) * 0.008] : [0, 0];
+  if ((ox !== was[0] || oy !== was[1]) && !busy) { resize(); still(); }
+}, 180000);
+
+addEventListener('resize', () => { resize(); shownArt = undefined; shown = null; sync(); });
+resize();
+still();
+poll(); setInterval(poll, 2000); setInterval(tick, 10000); setInterval(lyricTick, 100);
+</script>
