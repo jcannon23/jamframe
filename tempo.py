@@ -61,15 +61,22 @@ def decode(mp3):
             return array.array("h", w.readframes(w.getnframes()))
 
 
+def search(artist, title):
+    """Deezer's best match for a song (its search record), or None. Exact names first, then loosely."""
+    import requests
+    ask = lambda q: requests.get("https://api.deezer.com/search", timeout=6, params={"q": q, "limit": 1}).json().get("data")
+    found = ask('artist:"%s" track:"%s"' % (artist, title)) or ask(("%s %s" % (artist, title)).strip())
+    return found[0] if found else None
+
+
 def find_tempo(artist, title):
     """Beats a minute for a song, or None when it cannot be found."""
     import requests
     try:
-        search = lambda q: requests.get("https://api.deezer.com/search", timeout=6, params={"q": q, "limit": 1}).json().get("data")
-        found = search('artist:"%s" track:"%s"' % (artist, title)) or search("%s %s" % (artist, title))   # exact, then loose
+        found = search(artist, title)
         if not found:
             return None
-        track = requests.get("https://api.deezer.com/track/%s" % found[0]["id"], timeout=6).json()
+        track = requests.get("https://api.deezer.com/track/%s" % found["id"], timeout=6).json()
         if track.get("bpm"):
             return float(track["bpm"])
         if not track.get("preview"):

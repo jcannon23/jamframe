@@ -278,6 +278,30 @@ room.tick(conf, sp.now)
 assert room.display.page_state()["next"] is None and room.display.page_state()["position"] < 10
 watch.now_playing = real_now
 
+# AirPlay from a phone: Sonos has the song but no cover and no position; the cover is looked up, time is our own
+class Speaker:
+    group = None
+    def __init__(self, track):
+        self.track = track
+    def get_current_transport_info(self):
+        return {"current_transport_state": "PLAYING"}
+    def get_current_track_info(self):
+        return self.track
+looked = []
+watch.find_cover = lambda artist, title: looked.append((artist, title)) or ("http://covers/" + title if title == "Known" else None)
+air = {"uri": "x-sonos-vli:RINCON_1:1,airplay:abc", "title": "Known", "artist": "A", "album": "", "album_art": "",
+       "position": "0:00:00", "duration": "0:00:00"}
+assert watch.now_playing(Speaker(air)) == ("http://covers/Known", {"title": "Known", "artist": "A", "album": ""}, None, None)
+assert watch.now_playing(Speaker(dict(air, title="Unknown"))) is None and watch.now_playing(Speaker(dict(air, title=""))) is None
+assert watch.now_playing(Speaker(dict(air, album_art="http://sonos/art", duration="0:03:20", position="0:01:00")))[0::2] == ("http://sonos/art", 60)
+assert looked == [("A", "Known"), ("A", "Unknown")]
+room = watch.Room("Air", None, lambda url: b"jpeg")
+room.speaker = Speaker(air)
+room.tick(conf)
+room.began = (room.began[0], room.began[1] - 30)        # as if the song began half a minute ago
+room.tick(conf)
+assert 29.5 < room.display.page_state()["position"] < 32 and room.display.page_state()["art"]
+
 # over HTTP: status never carries the keys; controls and disconnect work, with the PIN that is set
 srv2 = serve({"Den": room.display}, port=0, path=path, spotify=sp)
 got = json.loads(urllib.request.urlopen("http://127.0.0.1:%d/spotify/status" % srv2.server_port).read())

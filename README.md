@@ -22,6 +22,8 @@ like the rest of the art on the wall. When the music stops, the TV goes back to 
   tempo. In Grooves the mat becomes a record that spins up when a song starts and winds down when it stops.
 - **Knows more with Spotify connected** (optional). Lyrics land on the line, the next song shows as this one
   ends, the caption can name the playlist and mark liked songs, and the settings page gets skip, pause and like.
+- **Works with AirPlay.** Music sent from a phone to a Sonos speaker arrives without a cover; JamFrame finds
+  one by the song's name and keeps its own time for lyrics and waves.
 - **Stays out of the way.** Never takes the screen from someone watching TV, ignores the TV's own sound,
   dims at night, and stays dark during quiet hours.
 

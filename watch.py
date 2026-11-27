@@ -24,6 +24,7 @@ import urllib.parse
 import urllib.request
 
 from display import Display, room_settings, within
+import tempo
 from tempo import find_tempo
 from treat import treat_bytes
 
@@ -201,18 +202,39 @@ def find_weather(wanted):
     return now
 
 
+_covers = {}     # (artist, title) -> (cover URL or None, when asked)
+
+
+def find_cover(artist, title):
+    """A cover for a song that arrived without one, as AirPlay from a phone does: Deezer's, found by name
+    (it is sent the song and artist names). None when it has no match; asked again after ten minutes."""
+    key = (artist, title)
+    if key not in _covers or (not _covers[key][0] and time.time() - _covers[key][1] > 600):
+        try:
+            hit = tempo.search(artist, title)
+            _covers[key] = ((hit.get("album") or {}).get("cover_xl") if hit else None, time.time())
+        except (OSError, ValueError):
+            _covers[key] = (None, time.time())
+    return _covers[key][0]
+
+
 def now_playing(room, ignore=()):
-    """(cover URL, {title, artist, album}, seconds in, length) if the room is playing music with a cover, else None.
+    """(cover URL, {title, artist, album}, seconds in, length) if the room is playing music, else None.
+    Seconds in and length are None when the source does not say (AirPlay, radio).
     ignore: names from SOURCES that do not count as music."""
     player = room.group.coordinator if room.group else room
     if player.get_current_transport_info()["current_transport_state"] != "PLAYING":
         return None
     track = player.get_current_track_info()
     skip = (TV_AUDIO,) + tuple(p for name in ignore for p in SOURCES.get(name, ()))
-    if track.get("uri", "").startswith(skip) or not track.get("album_art"):
+    if track.get("uri", "").startswith(skip):
         return None
     info = {k: track.get(k) or "" for k in ("title", "artist", "album")}
-    return track["album_art"], info, seconds(track.get("position")), seconds(track.get("duration"))
+    art = track.get("album_art") or (info["title"] and find_cover(info["artist"], info["title"]))
+    if not art:
+        return None
+    length = seconds(track.get("duration"))
+    return art, info, seconds(track.get("position")) if length else None, length or None
 
 
 class Room:
@@ -228,6 +250,7 @@ class Room:
         self.error = None        # why the last round failed, for the settings page
         self.song = None         # the song self.display.lyrics was looked up for
         self.beat = None         # the song self.display.tempo was looked up for
+        self.began = (None, 0)   # (song, when we first saw it): our own clock for sources that give no position
 
     def tick(self, conf, spot=None):
         """conf: all settings. spot: what the linked Spotify account is playing (spotify.Spotify.now), if anything."""
@@ -238,7 +261,10 @@ class Room:
         playing = now_playing(self.speaker, conf["ignore"]) if self.speaker else None
         if within(mine["quiet"]):
             playing, self.heard = None, 0
-        self.display.position = playing and playing[2] is not None and (playing[2], time.time()) or None
+        if playing and playing[1] != self.began[0]:
+            self.began = (playing[1], time.time())
+        self.display.position = playing and ((playing[2], time.time()) if playing[2] is not None
+                                             else (time.time() - self.began[1], time.time())) or None
         if playing:
             self.held, self.heard = playing[:2], time.time()
             song = mine["lyrics"] != "off" and playing[1]
