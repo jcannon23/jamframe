@@ -129,6 +129,7 @@ class Spotify:
             kind, ident = (parts[1], parts[2]) if len(parts) == 3 else ("", "")
             found = self.call(client_id, "GET", "/%ss/%s" % (kind, ident)) if kind in ("playlist", "album", "artist") else {}
             self.context = (uri, (found or {}).get("name"))
+            self.error = None       # Spotify's own mixes cannot be looked up by apps: no name, and not a fault
         now["source"] = self.context[1]
         self.now = now
 
