@@ -24,6 +24,8 @@ like the rest of the art on the wall. When the music stops, the TV goes back to 
   ends, the caption can name the playlist and mark liked songs, and the settings page gets skip, pause and like.
 - **Works with AirPlay.** Music sent from a phone to a Sonos speaker arrives without a cover; JamFrame finds
   one by the song's name and keeps its own time for lyrics and waves.
+- **Fits the screen it's on.** A TV, a tablet on a shelf or a phone standing upright: the cover, mat, caption
+  and lyrics size and arrange themselves to the screen's shape.
 - **Stays out of the way.** Never takes the screen from someone watching TV, ignores the TV's own sound,
   dims at night, and stays dark during quiet hours.
 
@@ -58,8 +60,9 @@ undoes both.
 
 ## Settings
 
-Everything is adjusted at `http://<this-computer>:8765/settings`, from a phone or a computer. Changes save as
-you make them and reach the screens within a few seconds.
+Everything is adjusted at `http://<this-computer>:8765/settings`, from a phone, tablet or laptop. Settings are
+split over four tabs; on a phone the preview stays pinned at the top, on a wider screen it sits in a sidebar.
+Changes save as you make them and reach the screens within a few seconds.
 
 | Section | Controls |
 |---|---|

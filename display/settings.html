@@ -5,6 +5,7 @@
 <style>
   :root { --paper: #e8e2d7; --card: #f1ece3; --ink: #3c362e; --soft: #7a7266; --line: #cfc7b9; --accent: #8a5a44; }
   * { box-sizing: border-box; }
+  [hidden] { display: none !important; }     /* or a hidden row's own display would win */
   body { margin: 0; background: var(--paper); color: var(--ink); font: 16px/1.45 "Iowan Old Style", Palatino, Georgia, serif; }
   /* Behind everything: paper with grain, a record sliding in from the corner, and a soft wash of colour
      from the cover that is playing. */
@@ -18,31 +19,55 @@
                  opacity: 0.2; }
   body::after { content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none; opacity: 0.35; mix-blend-mode: multiply;
                 background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.24 0 0 0 0 0.21 0 0 0 0 0.18 0 0 0 0.5 0'/%3E%3C/filter%3E%3Crect width='220' height='220' filter='url(%23n)'/%3E%3C/svg%3E"); }
-  main { max-width: 680px; margin: 0 auto; padding: 20px 16px 72px; }
-  h1 { font-size: 26px; font-weight: normal; margin: 0 0 10px; }
-  #top { position: sticky; top: 0; z-index: 2; margin: 0 -16px; padding: 8px 16px 10px; border-bottom: 1px solid var(--line);
-         background: rgba(232, 226, 215, 0.72); -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px); }
-  #screen { width: min(100%, 44vh * 16 / 9); aspect-ratio: 16 / 9; margin: 0 auto; background: #000; border: 6px solid #2a2724;
+  /* Phone: the preview, room and tab pickers stay pinned at the top; one tab's settings scroll under them.
+     Laptop or a tablet held sideways: those move into a sidebar, and the settings sit beside it in columns. */
+  main { max-width: 1280px; margin: 0 auto; padding: 0 16px 72px; }
+  #top { position: sticky; top: 0; z-index: 2; margin: 0 -16px; padding: 10px 16px 8px; border-bottom: 1px solid var(--line);
+         background: rgba(232, 226, 215, 0.78); -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px); }
+  #screen { width: min(100%, 21vh * 16 / 9); aspect-ratio: 16 / 9; margin: 0 auto; background: #000; border: 5px solid #2a2724;
             border-radius: 3px; box-shadow: 0 3px 10px rgba(40, 36, 30, 0.3); }
+  .chips.strip { display: flex; flex-wrap: nowrap; gap: 8px; margin-top: 8px; overflow-x: auto; scrollbar-width: none; justify-content: safe center; }
+  h1 { display: none; }                         /* a phone has no room to spare for it */
+  #spot button { padding: 5px 12px; }
+  .strip::-webkit-scrollbar { display: none; }
+  .strip label { flex: none; }
+  #tabs span { border-radius: 6px; }
+  #form { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 400px), 1fr)); align-items: start; margin-top: 16px; }
+  #form section, #own section { margin-top: 0; }
+  #own:not(:empty) { margin-top: 16px; }
+  #house { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 400px), 1fr)); align-items: start; margin-top: 16px; }
+  #house section { margin-top: 0; }
+  @media (min-width: 900px) {
+    main { display: grid; grid-template-columns: 360px minmax(0, 1fr); gap: 28px; align-items: start; padding-top: 20px; }
+    h1 { display: block; font-size: 26px; font-weight: normal; margin: 0 0 12px; }
+    #top { top: 20px; margin: 0; padding: 16px; border: 1px solid var(--line); border-radius: 8px; }
+    #screen { width: 100%; }
+    .chips.strip { flex-wrap: wrap; justify-content: center; }
+    #tabs.strip { flex-direction: column; flex-wrap: nowrap; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line); }
+    #tabs input:not(:checked) + span { text-align: left; border-color: transparent; background: none; }
+    #tabs span { text-align: left; padding: 9px 12px; }
+    #form, #house, #own:not(:empty) { margin-top: 0; }
+    #own:not(:empty) { margin-bottom: 16px; }
+  }
   #screen iframe { width: 100%; height: 100%; border: 0; display: block; pointer-events: none; }
   #now, #status { color: var(--soft); font-style: italic; font-size: 14px; min-height: 21px; text-align: center; margin-top: 6px; }
   section { background: rgba(241, 236, 227, 0.88); border: 1px solid var(--line); border-radius: 6px; padding: 16px; margin-top: 16px; }
   h2 { font-size: 13px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--soft); font-weight: normal; margin: 0 0 4px; }
   .row { display: flex; align-items: center; gap: 12px; margin-top: 12px; flex-wrap: wrap; }
-  .row > .name { flex: 0 0 140px; }
+  .row > .name { flex: 0 0 104px; }
   .chips { display: flex; flex-wrap: wrap; gap: 8px; }
   .chips label { cursor: pointer; }
   .chips input { position: absolute; opacity: 0; }
-  .chips span { display: block; padding: 6px 12px; border: 1px solid var(--line); border-radius: 999px; background: var(--paper); }
+  .chips span { display: block; padding: 8px 14px; border: 1px solid var(--line); border-radius: 999px; background: var(--paper); }
   .chips input:checked + span { background: var(--ink); color: var(--paper); border-color: var(--ink); }
   .chips input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 2px; }
-  input[type=range] { flex: 1; min-width: 140px; accent-color: var(--accent); }
-  output { flex: 0 0 64px; text-align: right; color: var(--soft); }
+  input[type=range] { flex: 1; min-width: 90px; accent-color: var(--accent); }
+  output { flex: 0 0 52px; text-align: right; color: var(--soft); }
   input[type=text], input[type=time] { font: inherit; color: inherit; background: var(--paper); border: 1px solid var(--line);
                                        border-radius: 4px; padding: 6px 8px; min-width: 0; }
   input[type=text] { flex: 1 1 150px; }
   button { font: inherit; color: var(--ink); background: var(--paper); border: 1px solid var(--line); border-radius: 4px;
-           padding: 6px 12px; cursor: pointer; }
+           padding: 8px 14px; cursor: pointer; }
   .room { padding: 10px 0; border-top: 1px solid var(--line); margin-top: 10px; }
   .room > div { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
   .room a { color: var(--accent); font-size: 14px; white-space: nowrap; }
@@ -51,17 +76,19 @@
 </style>
 <div id="wash"></div>
 <main>
-  <h1>JamFrame</h1>
-  <div id="top">
+  <aside id="top">
+    <h1>JamFrame</h1>
     <div id="screen"><iframe title="Preview of the room's screen"></iframe></div>
     <div id="now"></div>
-    <div class="row" style="justify-content: center; margin-top: 6px"><div class="chips" id="scope"></div></div>
     <div class="row" id="spot" style="justify-content: center; margin-top: 8px" hidden>
       <button data-do="previous">Previous</button><button data-do="pause" id="spot-play">Pause</button>
       <button data-do="next">Next</button><button data-do="like" id="spot-like">Like</button>
     </div>
+    <div class="chips strip" id="scope"></div>
+    <nav class="chips strip" id="tabs" aria-label="Settings"></nav>
     <div id="status">Loading…</div>
-  </div>
+  </aside>
+  <div id="pane">
   <div id="own"></div>
   <div id="form"></div>
   <div id="house">
@@ -99,6 +126,7 @@
         <button id="setpin">Set PIN</button></div>
       <p class="note" id="pinnote"></p>
     </section>
+  </div>
   </div>
 </main>
 <script>
@@ -160,6 +188,12 @@ const SPEC = () => [
 ];
 
 let conf, scope = null, form = {}, state = {};   // scope: null = all rooms, or one room's name
+// The settings are split over tabs; Home holds what belongs to the whole house, so it only shows for All rooms.
+const TABS = [['print', 'Print & caption'], ['motion', 'Motion & lyrics'], ['screen', 'Screen & idle'], ['home', 'Home & accounts']];
+const TAB_OF = { 'Print': 'print', 'Caption': 'print', 'Cover change': 'motion', 'Sound waves': 'motion', 'Lyrics': 'motion',
+                 'Screen': 'screen', 'When the music stops': 'screen', 'Quiet hours': 'screen' };
+let tab = (location.hash || '').slice(1);
+addEventListener('hashchange', () => { tab = location.hash.slice(1); if (conf) render(); });
 const LOOK = () => SPEC().flatMap(s => s[1]).filter(c => c.k).map(c => c.k.split('.')[0]);
 const get = k => k.split('.').reduce((o, p) => o[p], form);
 const put = (k, v) => { const [a, b] = k.split('.'); b ? form[a] = { ...form[a], [b]: v } : form[a] = v; };
@@ -197,16 +231,34 @@ function control(c) {
 // The controls show one scope: every room's settings, or one room's (the shared ones with its own on top).
 function render() {
   form = JSON.parse(JSON.stringify({ ...conf, ...(scope ? conf.overrides[scope] : {}) }));
-  $('form').replaceChildren(...SPEC().map(([title, controls]) => el('section', {}, el('h2', { textContent: title }), ...controls.map(control))));
-  $('house').hidden = !!scope;
+  const tabs = TABS.filter(t => t[0] !== 'home' || !scope);
+  if (!tabs.some(t => t[0] === tab)) tab = Object.keys(conf.rooms).length || scope ? 'print' : 'home';   // nothing set up yet: start at Rooms
+  $('tabs').replaceChildren(...tabs.map(([id, text]) => {
+    const input = el('input', { type: 'radio', name: 'tab', checked: id === tab });
+    input.onchange = () => { tab = id; history.replaceState(null, '', '#' + id); render(); scrollTo({ top: 0 }); };
+    return el('label', {}, input, el('span', { textContent: text }));
+  }));
+  $('form').replaceChildren(...SPEC().filter(([title]) => TAB_OF[title] === tab)
+    .map(([title, controls]) => el('section', {}, el('h2', { textContent: title }), ...controls.map(control))));
+  $('house').hidden = tab !== 'home';
   own();
   const names = Object.keys(conf.rooms);
   $('scope').replaceChildren(...[null, ...names].map(name => {
     const input = el('input', { type: 'radio', name: 'scope', checked: name === scope });
-    input.onchange = () => { scope = name; render(); };
+    input.onchange = () => { scope = name; render(); };     // a room has no Home tab: render() moves off it
     return el('label', {}, input, el('span', { textContent: name || 'All rooms' }));
   }));
-  const room = scope || names[0], src = room ? './?room=' + encodeURIComponent(room) : 'about:blank';
+  preview();
+}
+
+// The room on the preview: the one being edited, or for All rooms one with music playing.
+function shownRoom() {
+  const names = Object.keys(conf.rooms);
+  return scope || names.find(n => state && state[n] && state[n].playing) || names[0];
+}
+
+function preview() {
+  const room = shownRoom(), src = room ? './?room=' + encodeURIComponent(room) : 'about:blank';
   const frame = document.querySelector('iframe');
   if (frame.getAttribute('src') !== src) frame.src = src;
 }
@@ -284,7 +336,7 @@ async function save(kept) {
 }
 
 async function play() {
-  const room = scope || Object.keys(conf.rooms)[0];
+  const room = shownRoom();
   if (!state[room] || !state[room].playing) { status.textContent = 'Play music in ' + (room || 'a room') + ' first.'; return; }
   await send('play', { room, transition: form.transition });
   status.textContent = 'Playing it on the screen above.';
@@ -298,7 +350,8 @@ async function watch() {
     : !s.speaker ? `No Sonos room called “${name}” found yet.`
     : (s.playing ? `Playing ${s.playing.title || 'music'}${s.playing.artist ? ' by ' + s.playing.artist : ''}` : 'Nothing playing')
       + (s.tv ? ' · art TV' : s.app ? ' · TV app connected' : '');
-  const room = scope || Object.keys(conf.rooms)[0];
+  const room = shownRoom();
+  preview();
   $('now').textContent = room ? room + ': ' + say(room, state && state[room]) : 'Add a room below to start.';
   for (const row of $('rooms').children) {
     const name = row.querySelector('input').value.trim();

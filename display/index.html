@@ -1,60 +1,64 @@
 <!doctype html>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>JamFrame</title>
 <style>
+  /* --u: the unit everything is sized in. 1% of the height on a TV or laptop; on a tall screen (a phone
+     upright) it follows the width instead, so the cover always fits with room for its mat. */
+  :root { --u: min(1vh, 1.351vw); }
   html, body { margin: 0; height: 100%; background: #000; overflow: hidden; cursor: none; }
   canvas { width: 100vw; height: 100vh; display: block; }
   #w { position: fixed; top: 0; left: 0; pointer-events: none; }
   /* Caption under the cover, like the label of a print. --s is the cover's edge, --f the text scale. */
-  #cap { position: fixed; left: calc(50vw - var(--s) / 2); width: var(--s); top: calc(50vh + var(--s) / 2 + 2.2vh);
+  #cap { position: fixed; left: calc(50vw - var(--s) / 2); width: var(--s); top: calc(50vh + var(--s) / 2 + calc(2.2 * var(--u)));
          opacity: 0; transition: opacity 0.9s, color 2s; font-family: "Iowan Old Style", Palatino, Georgia, serif;
-         font-size: calc(var(--f) * 1vh); text-align: center; }
+         font-size: calc(var(--f) * calc(1 * var(--u))); text-align: center; }
   #cap div { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   #title { font-size: 2.3em; }
   #by { font-size: 1.6em; margin-top: 0.4em; font-style: italic; opacity: 0.8; }
   #src { font-size: 1.25em; margin-top: 0.55em; opacity: 0.6; letter-spacing: 0.04em; }
   /* The next song, from Spotify, in the bottom corner. */
-  #next { position: fixed; bottom: 4.5vh; right: 5.5vh; max-width: 32vw; text-align: right; opacity: 0;
+  #next { position: fixed; bottom: calc(4.5 * var(--u)); right: calc(5.5 * var(--u)); max-width: 32vw; text-align: right; opacity: 0;
           transition: opacity 2s, color 2s; font-family: "Iowan Old Style", Palatino, Georgia, serif; }
-  #next small { display: block; font-size: 1.4vh; letter-spacing: 0.22em; text-transform: uppercase; opacity: 0.6; }
-  #next div { font-size: 2.1vh; margin-top: 0.5vh; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #next small { display: block; font-size: calc(1.4 * var(--u)); letter-spacing: 0.22em; text-transform: uppercase; opacity: 0.6; }
+  #next div { font-size: calc(2.1 * var(--u)); margin-top: calc(0.5 * var(--u)); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   /* The song's words, in the style the settings page picked (class on #lyr). */
   #lyr { position: fixed; inset: 0; pointer-events: none; opacity: 0; transition: opacity 1.5s, color 2s;
          font-family: "Iowan Old Style", Palatino, Georgia, serif; }
-  #lyr .big { position: absolute; top: 50%; transform: translateY(-50%); width: calc(50vw - var(--s) / 2 - 9vh);
-              font-size: 7.5vh; line-height: 1.12; font-style: italic; opacity: 0; transition: opacity 0.45s;
-              text-shadow: 0 0.12vh 0 rgba(255, 255, 255, 0.25); }                 /* pressed into the paper */
-  #lyr .big.l { left: 4vh; text-align: right; }
-  #lyr .big.r { right: 4vh; text-align: left; }
+  #lyr .big { position: absolute; top: 50%; transform: translateY(-50%); width: calc(50vw - var(--s) / 2 - calc(9 * var(--u)));
+              font-size: calc(7.5 * var(--u)); line-height: 1.12; font-style: italic; opacity: 0; transition: opacity 0.45s;
+              text-shadow: 0 calc(0.12 * var(--u)) 0 rgba(255, 255, 255, 0.25); }                 /* pressed into the paper */
+  #lyr .big.l { left: calc(4 * var(--u)); text-align: right; }
+  #lyr .big.r { right: calc(4 * var(--u)); text-align: left; }
   #lyr .col { position: absolute; left: 3vw; width: calc(50vw - var(--s) / 2 - 7vw); top: 0; bottom: 0; overflow: hidden;
               -webkit-mask-image: linear-gradient(transparent 8%, #000 35%, #000 65%, transparent 92%);
               mask-image: linear-gradient(transparent 8%, #000 35%, #000 65%, transparent 92%); }
   #lyr .roll { position: absolute; left: 0; right: 0; top: 50%; transition: transform 0.8s ease; }
-  #lyr .roll div { font-size: 2vh; line-height: 1.45; padding: 0.6vh 0; min-height: 2.9vh; text-align: right;
+  #lyr .roll div { font-size: calc(2 * var(--u)); line-height: 1.45; padding: calc(0.6 * var(--u)) 0; min-height: calc(2.9 * var(--u)); text-align: right;
                    opacity: 0.28; transition: opacity 0.8s; }
   #lyr .roll div.on { opacity: 1; }
-  #lyr .one { position: absolute; left: 6vw; right: 6vw; bottom: calc(50vh + var(--s) / 2 + 3vh); text-align: center;
-              font-size: 2.6vh; font-style: italic; opacity: 0; transition: opacity 0.45s; }
+  #lyr .one { position: absolute; left: 6vw; right: 6vw; bottom: calc(50vh + var(--s) / 2 + calc(3 * var(--u))); text-align: center;
+              font-size: calc(2.6 * var(--u)); font-style: italic; opacity: 0; transition: opacity 0.45s; }
   #lyr.typewriter .one { font-family: "American Typewriter", "Courier New", monospace; font-style: normal;
                          letter-spacing: 0.03em; transition: none; }
   /* With no music: a clock (faces by class), today's date and the weather. */
   #clock { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
            opacity: 0; transition: opacity 2s, color 2s; font-family: "Iowan Old Style", Palatino, Georgia, serif; }
-  #clock .time { font-size: 20vh; line-height: 1; }
-  #clock .date { font-size: 3vh; margin-top: 2.5vh; opacity: 0.75; }
-  #clock .wx { font-size: 2.6vh; margin-top: 2vh; opacity: 0.75; }
+  #clock .time { font-size: calc(20 * var(--u)); line-height: 1; }
+  #clock .date { font-size: calc(3 * var(--u)); margin-top: calc(2.5 * var(--u)); opacity: 0.75; }
+  #clock .wx { font-size: calc(2.6 * var(--u)); margin-top: calc(2 * var(--u)); opacity: 0.75; }
   #clock.modern { font-family: "Helvetica Neue", Roboto, Arial, sans-serif; }
-  #clock.modern .time { font-size: 27vh; font-weight: 200; letter-spacing: -0.02em; }
-  #clock.modern .date, #clock.modern .wx { text-transform: uppercase; letter-spacing: 0.22em; font-size: 2.1vh; }
-  #clock.words .time { font-size: 9vh; font-style: italic; line-height: 1.15; text-align: center; max-width: 80vw; }
-  #clock.analog .time { width: 46vh; height: 46vh; }
+  #clock.modern .time { font-size: calc(27 * var(--u)); font-weight: 200; letter-spacing: -0.02em; }
+  #clock.modern .date, #clock.modern .wx { text-transform: uppercase; letter-spacing: 0.22em; font-size: calc(2.1 * var(--u)); }
+  #clock.words .time { font-size: calc(9 * var(--u)); font-style: italic; line-height: 1.15; text-align: center; max-width: 80vw; }
+  #clock.analog .time { width: calc(46 * var(--u)); height: calc(46 * var(--u)); }
   svg.sky { width: 1.25em; height: 1.25em; vertical-align: -0.28em; margin-right: 0.35em; fill: none; stroke: currentColor;
             stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
   /* The time and weather in a corner, while a cover is kept up after the music. */
-  #corner { position: fixed; top: 4.5vh; right: 5.5vh; text-align: right; opacity: 0; transition: opacity 2s, color 2s;
+  #corner { position: fixed; top: calc(4.5 * var(--u)); right: calc(5.5 * var(--u)); text-align: right; opacity: 0; transition: opacity 2s, color 2s;
             font-family: "Iowan Old Style", Palatino, Georgia, serif; }
-  #corner .time { font-size: 4.4vh; line-height: 1.1; }
-  #corner .wx { font-size: 2.2vh; margin-top: 0.6vh; opacity: 0.8; }
+  #corner .time { font-size: calc(4.4 * var(--u)); line-height: 1.1; }
+  #corner .wx { font-size: calc(2.2 * var(--u)); margin-top: calc(0.6 * var(--u)); opacity: 0.8; }
 </style>
 <canvas id="c"></canvas>
 <canvas id="w"></canvas>
@@ -74,16 +78,20 @@ const MATS = { paper: [232, 226, 215], white: [240, 239, 235], charcoal: [46, 44
 const SIZES = { small: 0.8, medium: 1, large: 1.3 };
 let look = { caption: true, align: 'center', fields: ['title', 'artist', 'album'], size: 'medium', mute: 0.5,
              mat: 'paper', cover: 0.62, grain: true, shift: false, idle: 'black', brightness: 1, lyrics: 'off', clock: 'classic', waves: 'off', wave_level: 0.6, wave_color: 'edges', upnext: 'off' };
-let W, H, S, X, Y;          // canvas size, cover edge, cover position
+let W, H, U, S, X, Y;       // canvas size, the unit sizes are worked out from (see --u), cover edge and position
 let ox = 0, oy = 0;         // burn-in shift, as a share of screen height
 
 function resize() {
-  const scale = Math.min(devicePixelRatio || 1, 1920 / innerWidth);   // 1080p is plenty for a TV chip
+  // Sharp on a phone or laptop (their real pixels), but never more than 1920 across: plenty for a TV's chip,
+  // and covers arrive at 640 pixels, so more would only cost speed.
+  const scale = Math.min(devicePixelRatio || 1, 1920 / Math.max(innerWidth, innerHeight));
   W = cv.width = Math.round(innerWidth * scale);
   H = cv.height = Math.round(innerHeight * scale);
-  S = Math.round(H * look.cover); X = Math.round((W - S) / 2 + ox * H); Y = Math.round((H - S) / 2 + oy * H);
-  document.documentElement.style.setProperty('--s', look.cover * 100 + 'vh');
-  cap.style.transform = clock.style.transform = corner.style.transform = `translate(${ox * 100}vh, ${oy * 100}vh)`;
+  U = Math.min(H, W / 0.74);
+  S = Math.round(U * look.cover); X = Math.round((W - S) / 2 + ox * U); Y = Math.round((H - S) / 2 + oy * U);
+  document.documentElement.style.setProperty('--s', `calc(${look.cover * 100} * var(--u))`);
+  cap.style.transform = clock.style.transform = corner.style.transform = `translate(calc(${ox * 100} * var(--u)), calc(${oy * 100} * var(--u)))`;
+  linesKey = '';              // lyrics may need a different layout at this shape
 }
 
 const rgb = c => `rgb(${c[0]},${c[1]},${c[2]})`;
@@ -132,7 +140,7 @@ async function load(url) {
 
 function mat(color) {
   g.fillStyle = rgb(color); g.fillRect(0, 0, W, H);
-  g.shadowColor = 'rgba(40,36,30,0.4)'; g.shadowBlur = H * 0.017; g.shadowOffsetY = H * 0.005;
+  g.shadowColor = 'rgba(40,36,30,0.4)'; g.shadowBlur = U * 0.017; g.shadowOffsetY = U * 0.005;
   g.fillRect(X, Y, S, S);
   g.shadowColor = 'transparent';
 }
@@ -234,7 +242,7 @@ function still() {
   frame(null, shown, 'fade', 1);
   cap.style.color = clock.style.color = lyr.style.color = corner.style.color = next.style.color = ink(shown ? shown.mat : idleColor());
   const halo = rgb(shown ? shown.mat : idleColor());                 // keeps waves from running through the caption
-  cap.style.textShadow = look.waves === 'off' ? '' : `0 0 0.6vh ${halo}, 0 0 1.2vh ${halo}, 0 0 2vh ${halo}`;
+  cap.style.textShadow = look.waves === 'off' ? '' : `0 0 calc(0.6 * var(--u)) ${halo}, 0 0 calc(1.2 * var(--u)) ${halo}, 0 0 calc(2 * var(--u)) ${halo}`;
   lyr.style.opacity = shown ? 1 : 0;
   tick();
 }
@@ -312,6 +320,7 @@ function label(w) {
 // since the server last told us. Styles: backdrop (large and faint either side of the cover), margin (a column
 // beside it, like a poem printed next to the picture), line (one line above it), typewriter (typed out).
 let lines = null, linesKey = '', line = -2, basePos = null, baseAt = 0, swapping = 0;
+let lyricStyle = 'off';      // look.lyrics, or 'line' where the screen has no room beside the cover
 
 // Backdrop: a line is cut in two at the word nearest its middle, one half for each side of the cover.
 function halves(text) {
@@ -327,20 +336,21 @@ function halves(text) {
 const at = () => basePos + (performance.now() - baseAt) / 1000;    // seconds into the song, by our own clock
 
 function setLyrics() {
-  const has = look.lyrics !== 'off' && wanted.art && wanted.lyrics || null;
+  lyricStyle = W < H * 1.25 && (look.lyrics === 'margin' || look.lyrics === 'backdrop') ? 'line' : look.lyrics;
+  const has = lyricStyle !== 'off' && wanted.art && wanted.lyrics || null;
   if (wanted.position == null) basePos = null;
   else {
     const mine = basePos === null ? null : at(), off = mine === null ? 99 : wanted.position - mine;
     basePos = Math.abs(off) > 1.5 ? wanted.position : mine + off * 0.15; baseAt = performance.now();
   }
-  const key = look.lyrics + '|' + wanted.art + '|' + wanted.title + '|' + (has ? has.length : 0);
+  const key = lyricStyle + '|' + wanted.art + '|' + wanted.title + '|' + (has ? has.length : 0);
   if (key === linesKey) return;
   linesKey = key; lines = has; line = -2;
-  lyr.className = look.lyrics;
+  lyr.className = lyricStyle;
   const div = (cls, ...kids) => { const e = document.createElement('div'); e.className = cls; e.append(...kids); return e; };
   if (!has) lyr.replaceChildren();
-  else if (look.lyrics === 'margin') lyr.replaceChildren(div('col', div('roll', ...has.map(l => div('', l[1])))));
-  else if (look.lyrics === 'backdrop') lyr.replaceChildren(div('big l'), div('big r'));
+  else if (lyricStyle === 'margin') lyr.replaceChildren(div('col', div('roll', ...has.map(l => div('', l[1])))));
+  else if (lyricStyle === 'backdrop') lyr.replaceChildren(div('big l'), div('big r'));
   else lyr.replaceChildren(div('one'));
 }
 
@@ -357,19 +367,19 @@ function lyricTick() {
   let i = -1;
   while (i + 1 < lines.length && lines[i + 1][0] <= pos) i++;
   const text = i < 0 ? '' : lines[i][1], el = lyr.firstChild;
-  if (look.lyrics === 'typewriter') {                    // typed over the first part of the line's time
+  if (lyricStyle === 'typewriter') {                    // typed over the first part of the line's time
     const until = i + 1 < lines.length ? lines[i + 1][0] : pos + 4;
     const span = Math.max(0.3, Math.min((until - (i < 0 ? 0 : lines[i][0])) * 0.6, text.length * 0.07));
     const n = i < 0 ? 0 : Math.min(text.length, Math.ceil(text.length * (pos - lines[i][0]) / span));
     el.textContent = text.slice(0, n) + (n < text.length ? '\u258d' : '');
     el.style.opacity = 1;
   } else if (i !== line) {
-    if (look.lyrics === 'margin') {
+    if (lyricStyle === 'margin') {
       const rows = el.firstChild.children, on = rows[Math.max(i, 0)];
       for (let k = 0; k < rows.length; k++) rows[k].classList.toggle('on', k === i);
       el.firstChild.style.transform = `translateY(${-(on.offsetTop + on.offsetHeight / 2)}px)`;
     } else {                                             // backdrop, line: fade out, change, fade in
-      const mine = ++swapping, back = look.lyrics === 'backdrop', parts = back ? halves(text) : [text];
+      const mine = ++swapping, back = lyricStyle === 'backdrop', parts = back ? halves(text) : [text];
       const els = [...lyr.children];
       els.forEach(e => { e.style.opacity = 0; });
       setTimeout(() => { if (mine !== swapping || !el.isConnected) return;
@@ -424,19 +434,19 @@ const WAVES = {
       const d = b.age * speed;
       if (d > reach) continue;
       const fade = Math.pow(1 - d / reach, 1.5);
-      wg.lineWidth = H * 0.0014 * (1 + b.power * 1.6);
+      wg.lineWidth = U * 0.0014 * (1 + b.power * 1.6);
       wg.globalAlpha = Math.min(1, b.power * fade * 1.5 * k); ring(d); wg.stroke();
-      if (b.power > 0.45 && d > H * 0.02) { wg.globalAlpha *= 0.35; wg.lineWidth *= 0.6; ring(d - H * 0.011); wg.stroke(); }
+      if (b.power > 0.45 && d > U * 0.02) { wg.globalAlpha *= 0.35; wg.lineWidth *= 0.6; ring(d - U * 0.011); wg.stroke(); }
     }
   },
   grooves(pos, reach, speed, k) {            // a record's grooves around the cover; each beat squeezes through them
-    const gap = H * 0.015, hits = beats(pos, 16);
-    wg.lineWidth = H * 0.0011;
+    const gap = U * 0.015, hits = beats(pos, 16);
+    wg.lineWidth = U * 0.0011;
     for (let d = gap; d < reach; d += gap) {
       let shift = 0, glow = 0;
       for (const b of hits) {
-        const x = (d - b.age * speed) / (H * 0.045), g = Math.exp(-x * x) * b.power;
-        shift -= x * g * H * 0.016; glow += g;
+        const x = (d - b.age * speed) / (U * 0.045), g = Math.exp(-x * x) * b.power;
+        shift -= x * g * U * 0.016; glow += g;
       }
       wg.globalAlpha = Math.min(1, (0.1 + 0.55 * glow * spin) * Math.pow(1 - d / reach, 1.1) * k * 1.4);
       ring(Math.max(0.5, d + shift * k * 1.4 * spin)); wg.stroke();
@@ -446,12 +456,12 @@ const WAVES = {
     const glint = shown.dark ? '255,255,255' : shown.wave.join(','), sheen = wg.createConicGradient(turned, X + S / 2, Y + S / 2);
     for (const at of [0, 0.5]) [[0, 0], [0.05, 0.5], [0.1, 0]].forEach(([o, a]) => sheen.addColorStop(at + o, `rgba(${glint},${a})`));
     sheen.addColorStop(0.49, `rgba(${glint},0)`); sheen.addColorStop(1, `rgba(${glint},0)`);
-    wg.strokeStyle = sheen; wg.lineWidth = H * 0.0016; wg.globalAlpha = Math.min(1, k * 1.2);
+    wg.strokeStyle = sheen; wg.lineWidth = U * 0.0016; wg.globalAlpha = Math.min(1, k * 1.2);
     for (let d = gap; d < reach; d += gap) { ring(d); wg.stroke(); }
   },
   emboss(pos, reach, speed, k) {             // ridges pressed into the paper: a shadow line under a lit one
-    const lift = H * 0.0016;
-    wg.lineWidth = H * 0.0038;
+    const lift = U * 0.0016;
+    wg.lineWidth = U * 0.0038;
     for (const b of beats(pos, 16)) {
       const d = b.age * speed;
       if (d > reach) continue;
@@ -462,8 +472,8 @@ const WAVES = {
   },
   rays(pos, reach, speed, k) {               // a halo of fine marks round the cover, rising and falling like a meter
     const hit = beats(pos, 3).reduce((m, b) => Math.max(m, b.power * Math.exp(-b.age * 5)), 0);
-    const n = 46, gap = H * 0.014;
-    wg.lineWidth = H * 0.0021; wg.globalAlpha = Math.min(1, 0.75 * k + 0.1);
+    const n = 46, gap = U * 0.014;
+    wg.lineWidth = U * 0.0021; wg.globalAlpha = Math.min(1, 0.75 * k + 0.1);
     wg.beginPath();
     for (let side = 0; side < 4; side++) for (let i = 0; i < n; i++) {
       if (side === 2 && look.caption) continue;                         // the caption has the space under the cover
@@ -477,10 +487,10 @@ const WAVES = {
     wg.stroke();
   },
   strings(pos, reach, speed, k) {            // lines running out from both sides; beats travel along them as waves
-    const n = 11, step = H * 0.011, hits = beats(pos, 16), edges = look.wave_color === 'edges';
-    wg.lineWidth = H * 0.0015;
+    const n = 11, step = U * 0.011, hits = beats(pos, 16), edges = look.wave_color === 'edges';
+    wg.lineWidth = U * 0.0015;
     for (const dir of [-1, 1]) {
-      const from = dir < 0 ? X - H * 0.012 : X + S + H * 0.012, far = dir < 0 ? 0 : W;
+      const from = dir < 0 ? X - U * 0.012 : X + S + U * 0.012, far = dir < 0 ? 0 : W;
       wg.globalAlpha = Math.min(1, 0.7 * k + 0.1);
       for (let j = 0; j < n; j++) {
         const row = Math.floor((j + 0.5) / n * 16), c = edges ? shown.edge[dir < 0 ? 63 - row : 16 + row] : shown.wave;
@@ -491,8 +501,8 @@ const WAVES = {
         wg.beginPath();
         for (let d = 0; d <= Math.abs(far - from); d += step) {
           let amp = 0;
-          for (const b of hits) { const x = (d - b.age * speed * 1.5) / (H * 0.1); amp += b.power * Math.exp(-x * x); }
-          const y = y0 + amp * weight * H * 0.026 * k * Math.sin(d / (H * 0.028) - pos * 7 + j * 0.9);
+          for (const b of hits) { const x = (d - b.age * speed * 1.5) / (U * 0.1); amp += b.power * Math.exp(-x * x); }
+          const y = y0 + amp * weight * U * 0.026 * k * Math.sin(d / (U * 0.028) - pos * 7 + j * 0.9);
           d ? wg.lineTo(from + dir * d, y) : wg.moveTo(from, y);
         }
         wg.stroke();
@@ -516,7 +526,7 @@ function waves(now) {
   wg.clearRect(0, 0, W, H);
   if (level < 0.01 || !shown || !WAVES[look.waves]) return;
   wg.globalAlpha = 1; wg.lineCap = 'round'; wg.strokeStyle = paint();
-  WAVES[look.waves](basePos === null ? performance.now() / 1000 : at(), Math.hypot(W, H) / 2 - S / 2, H * 0.12, level * look.wave_level * 1.5);
+  WAVES[look.waves](basePos === null ? performance.now() / 1000 : at(), Math.hypot(W, H) / 2 - S / 2, U * 0.12, level * look.wave_level * 1.5);
   wg.globalAlpha = 1; wg.clearRect(X, Y, S, S);
 }
 requestAnimationFrame(waves);
@@ -584,7 +594,7 @@ setInterval(() => {
   if ((ox !== was[0] || oy !== was[1]) && !busy) { resize(); still(); }
 }, 180000);
 
-addEventListener('resize', () => { resize(); shownArt = undefined; shown = null; sync(); });
+addEventListener('resize', () => { resize(); shownArt = undefined; shown = null; setLyrics(); sync(); });
 resize();
 still();
 poll(); setInterval(poll, 2000); setInterval(tick, 10000); setInterval(lyricTick, 100); setInterval(nextTick, 1000);
