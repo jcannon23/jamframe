@@ -72,6 +72,7 @@ Changes save as you make them and reach the screens within a few seconds.
 | Caption | On or off; song, artist, album; position; size |
 | Lyrics | Off, Backdrop, Margin, Line, Typewriter |
 | Sound waves | Off, Ripples, Grooves, Pressed, Rays, Strings; strength; colour from the cover's edges or one ink |
+| TV size | Each room's TV size in inches; Same real size, so a print is as big on the 85-inch as on the 65-inch |
 | Screen | Brightness, dimming at night, burn-in shift |
 | When the music stops | How long to wait, then black, the last cover (with the time in a corner), or a clock in one of four faces |
 | Spotify | Connect an account; previous, pause, next and like under the preview |

@@ -40,6 +40,8 @@ LOOK = {                    # every one of these can be overridden per room
     "mute": 0.5,            # 0 = the cover as it is, 1 = a very faded print
     "mat": "paper",         # "paper", "white", "charcoal", or "cover" (tinted by the cover)
     "cover": 0.62,          # cover edge as a share of screen height
+    "inches": 75,           # the TV's size, corner to corner: set per room
+    "same_size": False,     # True: everything is as big in real inches on this TV as on a 75-inch one
     "grain": True,
     "brightness": 1,
     "night": {"on": False, "from": "21:00", "to": "07:00", "brightness": 0.3},
@@ -62,6 +64,7 @@ DEFAULTS = {
     "weather": {"on": False, "place": "", "unit": "F"},   # shown with the clock, and in a corner of a kept cover
     "spotify": {"client_id": ""},   # of your app at developer.spotify.com; see spotify.py
 }
+REFERENCE = 75      # inches: the TV size the look settings are judged on when "same_size" is on
 PAGE = ["caption", "align", "fields", "size", "mute", "mat", "cover", "grain", "shift", "idle", "lyrics", "clock", "waves", "wave_level", "wave_color", "upnext"]   # what a TV page needs
 
 number = lambda v, lo, hi: type(v) in (int, float) and lo <= v <= hi
@@ -80,6 +83,8 @@ VALID = {
     "mute": lambda v: number(v, 0, 1),
     "mat": lambda v: v in ("paper", "white", "charcoal", "cover"),
     "cover": lambda v: number(v, 0.3, 0.8),
+    "inches": lambda v: number(v, 20, 150),
+    "same_size": lambda v: isinstance(v, bool),
     "grain": lambda v: isinstance(v, bool),
     "brightness": lambda v: number(v, 0.05, 1),
     "night": lambda v: window(v, ("brightness",)) and number(v["brightness"], 0.05, 1),
@@ -137,9 +142,11 @@ def within(hours, now=None):
 
 
 def look(conf, now=None):
-    """What a TV page needs out of a room's settings, night dimming applied."""
+    """What a TV page needs out of a room's settings, night dimming applied.
+    scale: how much bigger or smaller than usual to draw, so that sizes match in real inches across TVs."""
     night = conf["night"]
-    return dict({k: conf[k] for k in PAGE}, brightness=night["brightness"] if within(night, now) else conf["brightness"])
+    return dict({k: conf[k] for k in PAGE}, brightness=night["brightness"] if within(night, now) else conf["brightness"],
+                scale=round(REFERENCE / conf["inches"], 3) if conf["same_size"] else 1)
 
 
 class Display:

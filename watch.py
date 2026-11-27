@@ -23,7 +23,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-from display import Display, room_settings, within
+from display import Display, look, room_settings, within
 import tempo
 from tempo import find_tempo
 from treat import treat_bytes
@@ -61,6 +61,8 @@ class Watcher:
         self.art = None      # cover URL behind self.shown
         self.quiet_since = None
         self.grace = GRACE   # seconds of silence before the TV is restored
+        self.look = None     # how the still is made: display.look() of the TV's room
+        self.made = None     # the part of self.look the still on the TV was made with
 
     def cleanup(self, keep=None):
         """Delete covers we uploaded, including ones a crashed run left behind."""
@@ -73,12 +75,15 @@ class Watcher:
         now = time.time() if now is None else now
         if art:
             self.quiet_since = None
-            if art != self.art:
+            if art != self.art or self.style() != self.made:      # a new cover, or the same one restyled
                 self.show(art)
         elif self.before:
             self.quiet_since = self.quiet_since or now
             if now - self.quiet_since >= self.grace:
                 self.restore()
+
+    def style(self):
+        return {k: (self.look or {}).get(k) for k in ("mute", "mat", "cover", "grain", "scale")}
 
     def show(self, art):
         state = self.tv.call("GET", "/api/state")
@@ -94,8 +99,10 @@ class Watcher:
             }
             # or the slideshow would rotate away from the cover, and shuffle it in later
             self.tv.call("POST", "/api/settings", {"rotate": False})
-        name = PREFIX + hashlib.sha1(art.encode()).hexdigest()[:10] + ".jpg"
-        self.tv.call("PUT", "/api/pictures/" + name, treat_bytes(self.fetch(art)))
+        made = self.style()
+        name = PREFIX + hashlib.sha1((art + json.dumps(made, sort_keys=True)).encode()).hexdigest()[:10] + ".jpg"
+        self.tv.call("PUT", "/api/pictures/" + name, treat_bytes(self.fetch(art), {k: v for k, v in made.items() if v is not None}))
+        self.made = made
         self.tv.call("POST", "/api/art?picture=" + name)
         self.shown, self.art = name, art
         self.cleanup(keep=name)
@@ -288,7 +295,7 @@ class Room:
                     threading.Thread(target=look_up, daemon=True).start()
         self.display.update(*(self.held if time.time() - self.heard < mine["grace"] else (None, None)))
         if self.watcher:
-            self.watcher.grace = mine["grace"]
+            self.watcher.grace, self.watcher.look = mine["grace"], look(mine)
             self.watcher.step(playing and playing[0])
 
     def status(self):

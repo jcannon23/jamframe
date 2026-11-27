@@ -168,6 +168,12 @@ const SPEC = () => [
     { k: 'wave_color', name: 'Colour', chips: [['edges', 'From the cover’s edges'], ['ink', 'One ink']],
       note: 'Waves leave the cover while music plays, at the song’s own speed: worked out from a 30-second preview found at deezer.com, which is sent the song and artist names. They follow the tempo, not each beat: the screen cannot hear the room.' },
   ]],
+  ['TV size', [
+    { k: 'inches', name: 'This TV', range: [40, 100, 1], fmt: v => v + ' in',
+      note: 'Pick a room at the top first, then set its TV\u2019s size.' },
+    { k: 'same_size', name: 'Same real size', chips: ONOFF,
+      note: 'Off: the cover takes the same share of every screen, so it is bigger on a bigger TV. On: the cover, caption, clock and lyrics are the same size in inches on every TV, as they would be on a 75-inch one. A smaller share of an 85-inch, a larger share of a 65-inch.' },
+  ]],
   ['Screen', [
     { k: 'brightness', name: 'Brightness', range: [0.05, 1, 0.05], fmt: pct },
     { k: 'night.on', name: 'Dim at night', chips: ONOFF },
@@ -190,7 +196,7 @@ const SPEC = () => [
 let conf, scope = null, form = {}, state = {};   // scope: null = all rooms, or one room's name
 // The settings are split over tabs; Home holds what belongs to the whole house, so it only shows for All rooms.
 const TABS = [['print', 'Print & caption'], ['motion', 'Motion & lyrics'], ['screen', 'Screen & idle'], ['home', 'Home & accounts']];
-const TAB_OF = { 'Print': 'print', 'Caption': 'print', 'Cover change': 'motion', 'Sound waves': 'motion', 'Lyrics': 'motion',
+const TAB_OF = { 'TV size': 'screen', 'Print': 'print', 'Caption': 'print', 'Cover change': 'motion', 'Sound waves': 'motion', 'Lyrics': 'motion',
                  'Screen': 'screen', 'When the music stops': 'screen', 'Quiet hours': 'screen' };
 let tab = (location.hash || '').slice(1);
 addEventListener('hashchange', () => { tab = location.hash.slice(1); if (conf) render(); });

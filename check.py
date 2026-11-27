@@ -315,4 +315,29 @@ def spot(action, pin="2468"):
         return e.code
 assert spot("pause") == 204 and spot("pause", pin="0") == 403 and spot("explode") == 400
 assert spot("disconnect") == 204 and not sp.connected and not os.path.exists(keys)
+
+# TVs of different sizes: with "same real size" on, a bigger TV draws smaller and a smaller one larger; the still
+# for an art TV follows the look settings too, and is made again when they change
+from display import look as page_look
+from treat import treat
+base = dict(settings(path), same_size=True)
+assert page_look(dict(base, inches=75))["scale"] == 1 and page_look(dict(base, inches=85))["scale"] == 0.882
+assert page_look(dict(base, inches=65))["scale"] == 1.154 and page_look(dict(base, inches=65, same_size=False))["scale"] == 1
+red = Image.new("RGB", (640, 640), (200, 40, 40))
+def cover_edge(img):                       # width of the cover: where the middle row stops being mat
+    row = [img.getpixel((x, 1080)) for x in range(0, 3840, 4)]
+    return 4 * sum(1 for p in row if abs(p[0] - row[0][0]) + abs(p[1] - row[0][1]) > 60)
+sizes = [cover_edge(treat(red, {"scale": s, "grain": False})) for s in (0.882, 1, 1.154)]
+assert sizes[0] < sizes[1] < sizes[2] and abs(sizes[1] - 1340) < 30 and abs(sizes[2] - 1545) < 30, sizes
+assert treat(red, {"mat": "charcoal", "grain": False}).getpixel((50, 50))[0] < 90 < treat(red, {"grain": False}).getpixel((50, 50))[0]
+tv.update(mode="off", picture=None)
+w.step(None, now=5000 + watch.GRACE); w.step(None, now=5001 + 2 * watch.GRACE)
+w.look = {"mute": 0.5, "mat": "paper", "cover": 0.62, "grain": True, "scale": 1}
+w.step("http://a/7", now=6000)
+first = ours()[0]
+w.step("http://a/7", now=6003)
+assert ours() == [first]                    # nothing changed: not made again
+w.look = dict(w.look, scale=0.882)
+w.step("http://a/7", now=6006)
+assert len(ours()) == 1 and ours()[0] != first
 print("spotify ok")

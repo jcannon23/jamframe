@@ -5,7 +5,7 @@
 <style>
   /* --u: the unit everything is sized in. 1% of the height on a TV or laptop; on a tall screen (a phone
      upright) it follows the width instead, so the cover always fits with room for its mat. */
-  :root { --u: min(1vh, 1.351vw); }
+  :root { --u: calc(min(1vh, 1.351vw) * var(--k, 1)); }      /* --k: the real-size scale for this TV */
   html, body { margin: 0; height: 100%; background: #000; overflow: hidden; cursor: none; }
   canvas { width: 100vw; height: 100vh; display: block; }
   #w { position: fixed; top: 0; left: 0; pointer-events: none; }
@@ -77,7 +77,7 @@ const corner = document.getElementById('corner'), next = document.getElementById
 const MATS = { paper: [232, 226, 215], white: [240, 239, 235], charcoal: [46, 44, 41] }, SHADE = [60, 54, 46];
 const SIZES = { small: 0.8, medium: 1, large: 1.3 };
 let look = { caption: true, align: 'center', fields: ['title', 'artist', 'album'], size: 'medium', mute: 0.5,
-             mat: 'paper', cover: 0.62, grain: true, shift: false, idle: 'black', brightness: 1, lyrics: 'off', clock: 'classic', waves: 'off', wave_level: 0.6, wave_color: 'edges', upnext: 'off' };
+             mat: 'paper', cover: 0.62, grain: true, shift: false, idle: 'black', brightness: 1, lyrics: 'off', clock: 'classic', waves: 'off', wave_level: 0.6, wave_color: 'edges', upnext: 'off', scale: 1 };
 let W, H, U, S, X, Y;       // canvas size, the unit sizes are worked out from (see --u), cover edge and position
 let ox = 0, oy = 0;         // burn-in shift, as a share of screen height
 
@@ -87,9 +87,11 @@ function resize() {
   const scale = Math.min(devicePixelRatio || 1, 1920 / Math.max(innerWidth, innerHeight));
   W = cv.width = Math.round(innerWidth * scale);
   H = cv.height = Math.round(innerHeight * scale);
-  U = Math.min(H, W / 0.74);
-  S = Math.round(U * look.cover); X = Math.round((W - S) / 2 + ox * U); Y = Math.round((H - S) / 2 + oy * U);
-  document.documentElement.style.setProperty('--s', `calc(${look.cover * 100} * var(--u))`);
+  const full = Math.min(H, W / 0.74);
+  U = full * (look.scale || 1);      // scaled so sizes match in real inches across TVs of different sizes
+  S = Math.round(Math.min(U * look.cover, full * 0.84)); X = Math.round((W - S) / 2 + ox * U); Y = Math.round((H - S) / 2 + oy * U);
+  document.documentElement.style.setProperty('--k', look.scale || 1);
+  document.documentElement.style.setProperty('--s', `min(calc(${look.cover * 100} * var(--u)), calc(84 * min(1vh, 1.351vw)))`);
   cap.style.transform = clock.style.transform = corner.style.transform = `translate(calc(${ox * 100} * var(--u)), calc(${oy * 100} * var(--u)))`;
   linesKey = '';              // lyrics may need a different layout at this shape
 }
@@ -580,7 +582,7 @@ async function poll() {
     if (differs(['caption', 'fields'])) capKey = null;
     if (differs(['waves']) && !busy) still();
     setLyrics();
-    if (differs(['mute', 'mat', 'cover'])) await redo();
+    if (differs(['mute', 'mat', 'cover', 'scale'])) await redo();
     else if (differs(['grain', 'idle']) && !busy) still();
     tick();
     sync();
