@@ -49,6 +49,7 @@ LOOK = {                    # every one of these can be overridden per room
     "lyrics": "off",        # how the song's words are shown: one of LYRICS
     "waves": "off",         # sound waves coming off the cover while music plays: one of WAVES
     "wave_level": 0.6,      # how strong they are, 0.1 - 1
+    "wave_color": "edges",  # "edges": each wave takes the colours along the cover's sides; "ink": one colour
 }
 DEFAULTS = {
     **LOOK,
@@ -58,7 +59,7 @@ DEFAULTS = {
     "pin": "",              # digits; when set, changing settings needs it
     "weather": {"on": False, "place": "", "unit": "F"},   # shown with the clock, and in a corner of a kept cover
 }
-PAGE = ["caption", "align", "fields", "size", "mute", "mat", "cover", "grain", "shift", "idle", "lyrics", "clock", "waves", "wave_level"]   # what a TV page needs
+PAGE = ["caption", "align", "fields", "size", "mute", "mat", "cover", "grain", "shift", "idle", "lyrics", "clock", "waves", "wave_level", "wave_color"]   # what a TV page needs
 
 number = lambda v, lo, hi: type(v) in (int, float) and lo <= v <= hi
 clock = lambda v: isinstance(v, str) and re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d", v)
@@ -88,6 +89,7 @@ VALID = {
     "lyrics": lambda v: v in LYRICS,
     "waves": lambda v: v in WAVES,
     "wave_level": lambda v: number(v, 0.1, 1),
+    "wave_color": lambda v: v in ("edges", "ink"),
     "rooms": lambda v: isinstance(v, dict) and all(
         isinstance(name, str) and 0 < len(name) <= 64
         and (tv is None or isinstance(tv, str) and re.fullmatch(r"[A-Za-z0-9.-]{1,253}(:\d{1,5})?", tv))
@@ -149,6 +151,7 @@ class Display:
         self.lyrics = None          # [[seconds, line], ...] of the song playing, when wanted and found
         self.position = None        # (seconds into the song, time.time() it was read), while playing
         self.tv_seen = 0            # when the JamFrame TV app last asked for this room
+        self.tempo = None           # beats a minute of the song playing, when wanted and found
 
     def pick(self):
         s = room_settings(settings(self.settings), self.room)
@@ -189,7 +192,8 @@ class Display:
         at = self.position and self.position[0] + time.time() - self.position[1]
         return {**self.state, "play": self.plays, "demo": self.demo,
                 "from": "cover/" + names[-2] if len(names) > 1 else None,
-                "lyrics": self.lyrics if self.url else None, "position": at if self.url else None}
+                "lyrics": self.lyrics if self.url else None, "position": at if self.url else None,
+                "bpm": self.tempo if self.url else None}
 
 
 def serve(displays, port=PORT, speakers=(), path=SETTINGS, status=None, weather=None):

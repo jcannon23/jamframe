@@ -18,8 +18,8 @@ like the rest of the art on the wall. When the music stops, the TV goes back to 
 - **Captions the print.** Song, artist and album under the cover, like a gallery label.
 - **Shows lyrics, if you want them.** Four styles: large and faint either side of the cover, a column in the
   margin, a single line, or typed out as it's sung.
-- **Sends sound waves off the cover.** Five styles, each song with its own pulse. Drawn, not heard: the
-  screen has no microphone.
+- **Sends sound waves off the cover.** Five styles, coloured by the cover's own edges, moving at the song's
+  tempo. In Grooves the mat becomes a record that spins up when a song starts and winds down when it stops.
 - **Stays out of the way.** Never takes the screen from someone watching TV, ignores the TV's own sound,
   dims at night, and stays dark during quiet hours.
 
@@ -64,7 +64,7 @@ you make them and reach the screens within a few seconds.
 | Print | Fading, cover size, mat (paper, white, charcoal, or tinted by the cover), grain |
 | Caption | On or off; song, artist, album; position; size |
 | Lyrics | Off, Backdrop, Margin, Line, Typewriter |
-| Sound waves | Off, Ripples, Grooves, Pressed, Rays, Strings; strength |
+| Sound waves | Off, Ripples, Grooves, Pressed, Rays, Strings; strength; colour from the cover's edges or one ink |
 | Screen | Brightness, dimming at night, burn-in shift |
 | When the music stops | How long to wait, then black, the last cover (with the time in a corner), or a clock in one of four faces |
 | Weather | On or off, place, °F or °C; shown with the clock and the kept cover |
@@ -84,6 +84,11 @@ Lyrics come from [LRCLIB](https://lrclib.net), a free lyrics database. When lyri
 and album names are sent there to look them up; nothing else is. Songs with timed lyrics follow the music
 line by line. Songs with only plain lyrics are spread evenly over the song, which is close but not exact.
 Songs it does not know show none.
+
+Sound waves move at the song's tempo, which `tempo.py` gets from [Deezer](https://developers.deezer.com/api)
+(sent the song and artist names): the listed tempo where there is one, otherwise measured from the 30-second
+preview clip. It is the song's speed, not the position of each beat: nothing hears the room. Measuring needs
+`afconvert` (on every Mac) or `ffmpeg`; without either, each song gets a made-up tempo of its own.
 
 Weather comes from [Open-Meteo](https://open-meteo.com), also free and without an account. It is sent the place
 name you typed, then that place's coordinates.
@@ -109,6 +114,7 @@ debugging turned on at the TV. What is left to prove on real TVs is listed in
 | `display.py` | Serves the room pages and the settings page; holds every setting and its limits |
 | `display/index.html` | A room's screen: mat, cover, caption, lyrics, the changes between covers |
 | `display/settings.html` | The settings page |
+| `tempo.py` | A song's tempo: `python tempo.py "Artist" "Song"` |
 | `treat.py` | Cover in, finished 4K print out: `python treat.py cover.jpg out.jpg` |
 | `check.py` | Checks the lot against a stand-in TV: `python check.py` |
 | `tv/` | The JamFrame TV app for Google TVs |

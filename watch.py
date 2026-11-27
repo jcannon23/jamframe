@@ -17,12 +17,14 @@ import json
 import os
 import signal
 import sys
+import threading
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
 
 from display import Display, room_settings, within
+from tempo import find_tempo
 from treat import treat_bytes
 
 POLL = 3        # jamframe: polling, not UPnP event subscriptions; switch if 3 s lag ever matters
@@ -225,6 +227,7 @@ class Room:
         self.clean = False
         self.error = None        # why the last round failed, for the settings page
         self.song = None         # the song self.display.lyrics was looked up for
+        self.beat = None         # the song self.display.tempo was looked up for
 
     def tick(self, conf):
         """conf: all settings."""
@@ -242,6 +245,15 @@ class Room:
             if song != self.song:        # looked up once per song, found or not
                 self.song = song
                 self.display.lyrics = find_lyrics(song, playing[3]) if song and song["title"] else None
+            beat = mine["waves"] != "off" and playing[1]
+            if beat != self.beat:        # the tempo takes a second or two to work out: not in this loop
+                self.beat, self.display.tempo = beat, None
+                if beat and beat["title"]:
+                    def look_up(display=self.display, wanted=beat):
+                        found = find_tempo(wanted["artist"], wanted["title"])
+                        if self.beat == wanted:
+                            display.tempo = found
+                    threading.Thread(target=look_up, daemon=True).start()
         self.display.update(*(self.held if time.time() - self.heard < mine["grace"] else (None, None)))
         if self.watcher:
             self.watcher.grace = mine["grace"]

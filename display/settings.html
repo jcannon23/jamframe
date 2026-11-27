@@ -122,8 +122,9 @@ const SPEC = () => [
   ]],
   ['Sound waves', [
     { k: 'waves', chips: [['off', 'Off'], ['ripples', 'Ripples'], ['grooves', 'Grooves'], ['emboss', 'Pressed'], ['rays', 'Rays'], ['strings', 'Strings']] },
-    { k: 'wave_level', name: 'Strength', range: [0.1, 1, 0.05], fmt: pct,
-      note: 'Waves leave the cover while music plays. They are drawn, not heard: the screen has no microphone, so each song gets its own steady pulse rather than its real beat.' },
+    { k: 'wave_level', name: 'Strength', range: [0.1, 1, 0.05], fmt: pct },
+    { k: 'wave_color', name: 'Colour', chips: [['edges', 'From the cover’s edges'], ['ink', 'One ink']],
+      note: 'Waves leave the cover while music plays, at the song’s own speed: worked out from a 30-second preview found at deezer.com, which is sent the song and artist names. They follow the tempo, not each beat: the screen cannot hear the room.' },
   ]],
   ['Screen', [
     { k: 'brightness', name: 'Brightness', range: [0.05, 1, 0.05], fmt: pct },

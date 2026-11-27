@@ -169,7 +169,17 @@ assert json.loads(get("/state?room=Game%20Room"))["look"] == dict(look(settings(
 at = lambda h: __import__("time").mktime((2026, 1, 1, h, 30, 0, 0, 0, -1))
 late = {"on": True, "from": "22:00", "to": "07:00"}
 assert within(late, at(23)) and within(late, at(3)) and not within(late, at(12)) and not within(dict(late, on=False), at(23))
-assert post({"waves": "grooves", "wave_level": 0.8}) == 204 and post({"waves": "tsunami"}) == 400
+assert post({"waves": "grooves", "wave_level": 0.8, "wave_color": "ink"}) == 204 and post({"waves": "tsunami"}) == 400
+# tempo: a click every half second is 120 beats a minute
+import array, tempo
+click = array.array("h", [0]) * (tempo.RATE * 12)
+for beat in range(24):
+    for i in range(400):
+        click[beat * tempo.RATE // 2 + i] = 20000 if i % 2 else -20000
+assert abs(tempo.tempo_of(click) - 120) < 1.5, tempo.tempo_of(click)
+assert tempo.tempo_of(array.array("h", [0]) * tempo.RATE * 3) is None
+a.tempo = 96.5
+assert json.loads(get("/state?room=Playroom"))["bpm"] == 96.5
 assert post({"clock": "analog", "weather": {"on": True, "place": "Portland, Oregon", "unit": "F"}}) == 204
 assert json.loads(get("/state"))["look"]["clock"] == "analog" and json.loads(get("/state"))["weather"] is None
 assert watch.find_weather({"on": False, "place": "Portland", "unit": "F"}) is None
