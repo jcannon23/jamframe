@@ -22,10 +22,8 @@ like the rest of the art on the wall. When the music stops, the TV goes back to 
   tempo. In Grooves the mat becomes a record that spins up when a song starts and winds down when it stops.
 - **Knows more with Spotify connected** (optional). Lyrics land on the line, the next song shows as this one
   ends, the caption can name the playlist and mark liked songs, and the settings page gets skip, pause and like.
-- **Works with SiriusXM and other radio.** The song's own cover rather than the channel logo, with the channel
-  named in the caption (tick Playlist under Caption). The logo shows during talk and adverts.
-- **Works with AirPlay.** Music sent from a phone to a Sonos speaker arrives without a cover; JamFrame finds
-  one by the song's name and keeps its own time for lyrics and waves.
+- **Works with SiriusXM, AirPlay and radio**, not just Spotify. The song's own cover rather than a channel
+  logo, with the channel shown in a corner. See [What can play](#what-can-play).
 - **Fits the screen it's on.** A TV, a tablet on a shelf or a phone standing upright: the cover, mat, caption
   and lyrics size and arrange themselves to the screen's shape.
 - **Stays out of the way.** Never takes the screen from someone watching TV, ignores the TV's own sound,
@@ -71,7 +69,7 @@ Changes save as you make them and reach the screens within a few seconds.
 | Preview | A live copy of the room's screen, and what the room is doing |
 | Cover change | Style, length, and **Play it now** to try one |
 | Print | Fading, cover size, mat (paper, white, charcoal, or tinted by the cover), grain |
-| Caption | On or off; song, artist, album; position; size |
+| Caption | On or off; song, artist, album, playlist or channel, a heart if liked; position; size; up next; radio station badge |
 | Lyrics | Off, Backdrop, Margin, Line, Typewriter |
 | Sound waves | Off, Ripples, Grooves, Pressed, Rays, Strings; strength; colour from the cover's edges or one ink |
 | TV size | Each room's TV size in inches; Same real size, so a print is as big on the 85-inch as on the 65-inch |
@@ -88,6 +86,31 @@ Changes save as you make them and reach the screens within a few seconds.
 bedroom can be dimmer and slower than the playroom.
 
 Settings live in `settings.json` next to the code; the page is the easier way to edit it.
+
+## What can play
+
+JamFrame shows whatever a Sonos speaker is playing, however it got there.
+
+| Source | Cover | Song and artist | Position | Extras |
+|---|---|---|---|---|
+| Spotify on Sonos | From Sonos | Yes | To the second; exact with Spotify connected | Up next, playlist, liked |
+| AirPlay from a phone | From the phone | Yes | Yes | Spotify's extras too, when it is Spotify being AirPlayed |
+| SiriusXM on Sonos | The song's cover | Yes | From the start of each song | Channel logo and name in the corner |
+| SiriusXM over AirPlay | From the phone | Yes | Counted by JamFrame | Channel name in the corner |
+| Other radio | The song's cover if it can be found, else the station's logo | When the station sends them | Counted by JamFrame | Station logo and name |
+| The TV's own sound | Never shown | | | |
+
+**SiriusXM.** Played from the Sonos app, Sonos passes along the song, artist, album, the channel
+("CH 25 - Classic Rewind") and a small cover. JamFrame shows the song's cover, not the channel's logo: a sharp
+one found by the song's name when it is from the album SiriusXM names, otherwise the one SiriusXM sent. During
+talk and adverts the channel's logo is the picture. Played from the SiriusXM app over AirPlay, the song arrives
+as "Artist - Song" with the show as the artist and the channel as the album; JamFrame unpacks that so the
+caption reads properly and lyrics and tempo can find the song. No logo comes over AirPlay, so the corner shows
+the channel's name alone.
+
+The channel in the corner is under **Settings → Print & caption → Radio station** (off, name, or logo and name).
+
+Lyrics are less reliable on radio: songs are faded and talked over, and timing is counted rather than known.
 
 ## Lyrics
 
