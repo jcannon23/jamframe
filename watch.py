@@ -258,6 +258,13 @@ def now_playing(room, ignore=()):
         return None
     info = {k: track.get(k) or "" for k in ("title", "artist", "album")}
     on_air = station(player, track["uri"]) if track.get("uri", "").startswith(RADIO) else None
+    # SiriusXM's app over AirPlay packs it differently: the album is the channel ("Ch 28 · The Spectrum"), the
+    # artist is the show, and the song is "Artist - Song". Unpacked, lyrics and tempo can find the song too.
+    channel = None if on_air else re.fullmatch(r"Ch\.? ?(\d+) ?[·\-–] ?(.+)", info["album"])
+    if channel:
+        on_air = ("CH %s - %s" % channel.groups(), "")          # no logo comes over AirPlay
+        artist, dash, song = info["title"].partition(" - ")
+        info = {"title": song, "artist": artist, "album": ""} if dash else dict(info, album="")
     # Best picture first: what Sonos has; a sharp cover found by name, if it is from the right album; the one
     # the station sent with the song (small, but right); any cover found by name; the station's logo, as during
     # talk and adverts.

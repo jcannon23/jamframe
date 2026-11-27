@@ -320,6 +320,13 @@ on = {"uri": "x-sonosapi-hls:channel-linear%3aabc?sid=37", "title": "Known", "ar
 assert watch.now_playing(Radio(on)) == ("http://covers/Known", {"title": "Known", "artist": "A", "album": "B"}, 23, None, ("CH 25 - Classic Rewind", "http://logo/25.png?a=1&b=2"))
 assert watch.now_playing(Radio(dict(on, title="Unknown")))[0] == "http://sxm/small_m.jpg"
 assert watch.now_playing(Radio(dict(on, title="", metadata="")))[0] == "http://logo/25.png?a=1&b=2"
+# SiriusXM's app over AirPlay: channel in the album, show in the artist, "Artist - Song" in the title
+sxm = dict(air, title="Rolling Stones - Brown Sugar", artist="The Spectrum with Jenny Eliscu", album="Ch 28 · The Spectrum",
+           album_art="http://sonos/art", position="", duration="")
+assert watch.now_playing(Speaker(sxm)) == ("http://sonos/art", {"title": "Brown Sugar", "artist": "Rolling Stones", "album": ""},
+                                           None, None, ("CH 28 - The Spectrum", ""))
+talk = watch.now_playing(Speaker(dict(sxm, title="Station break")))
+assert talk[1] == {"title": "Station break", "artist": "The Spectrum with Jenny Eliscu", "album": ""} and talk[4][0] == "CH 28 - The Spectrum"
 room = watch.Room("Radio", None, lambda url: b"jpeg")
 room.speaker = Radio(on)
 room.tick(conf)
