@@ -136,6 +136,109 @@ def download(url):
     return r.content
 
 
+FRAMES = os.path.join(os.path.dirname(os.path.abspath(__file__)), "frame.json")
+
+
+class FrameWatcher(Watcher):
+    """The same job on a Samsung Frame, through its own art mode: the cover is uploaded as one of "My Photos",
+    shown, and afterwards the picture that was up is put back and ours deleted. Nothing is installed on the TV.
+    It only ever acts while the TV is showing art: a Frame that is being watched, or is off, is left alone."""
+
+    def __init__(self, address, fetch=None, connect=None, memory=FRAMES):
+        super().__init__(None, fetch)
+        self.address, self.memory = address, memory
+        self.connect = connect      # address -> an open samsungtvws SamsungTVArt (or a stand-in, in check.py)
+        self.rest_until, self.why = 0, None
+
+    def frame(self):
+        """An open connection to the TV. After a failure, the next tries are refused for a while without
+        knocking: a Frame that is off answers nothing, and waiting on it would hold up every other room."""
+        if time.time() < self.rest_until:
+            raise OSError(self.why)
+        try:
+            if self.connect:
+                return self.connect(self.address)
+            import urllib3
+            from samsungtvws.art import SamsungTVArt
+            urllib3.disable_warnings()      # the TV's own certificate is self-signed; there is nothing to check it against
+            tv = SamsungTVArt(self.address, port=8002, timeout=8, name="JamFrame",
+                              token_file=os.path.join(os.path.dirname(self.memory), "frame-token-" + self.address))
+            tv.open()
+            return tv
+        except Exception as e:              # the library raises its own errors, the socket's, and plain ones
+            self.rest_until, self.why = time.time() + 30, "Samsung Frame at %s: %s" % (self.address, e or type(e).__name__)
+            raise OSError(self.why)
+
+    def ours(self, keep=...):
+        """The pictures we have uploaded to this TV and not yet deleted; with keep, set that list."""
+        try:
+            with open(self.memory) as f:
+                known = json.load(f)
+        except (OSError, ValueError):
+            known = {}
+        if keep is not ...:
+            known[self.address] = keep
+            with open(self.memory, "w") as f:
+                json.dump(known, f)
+        return known.get(self.address, [])
+
+    def cleanup(self, keep=None):
+        """Delete covers we uploaded, including ones a crashed run left behind."""
+        stale = [i for i in self.ours() if i != keep]
+        if stale:
+            tv = self.frame()
+            try:
+                tv.delete_list(stale)
+            except Exception as e:
+                raise OSError("Samsung Frame: %s" % e)
+            finally:
+                tv.close()
+        self.ours([keep] if keep else [])
+
+    def show(self, art):
+        tv = self.frame()
+        try:
+            if tv.get_artmode() != "on":        # someone is watching TV (or just switched to it mid-album)
+                self.rest_until, self.why = time.time() + 15, None
+                if self.before:
+                    self.before = self.shown = self.art = self.made = self.quiet_since = None
+                return
+            if not self.before:
+                self.before = {"picture": tv.get_current().get("content_id")}
+            made = self.style()
+            still = treat_bytes(self.fetch(art), {k: v for k, v in made.items() if v is not None})
+            new = tv.upload(still, matte="none", portrait_matte="none", file_type="jpg")    # our mat is in the picture
+            self.ours(self.ours() + [new])      # written down before it is shown, in case we stop right here
+            tv.select_image(new, show=True)
+            self.shown, self.art, self.made = new, art, made
+        except OSError:
+            raise
+        except Exception as e:
+            raise OSError("Samsung Frame: %s" % e)
+        finally:
+            tv.close()
+        self.cleanup(keep=self.shown)
+        print("showing", art, flush=True)
+
+    def restore(self):
+        """Music is over: put back the picture that was up."""
+        tv = self.frame()
+        try:
+            showing = tv.get_artmode() == "on" and tv.get_current().get("content_id") == self.shown
+            if showing and self.before["picture"]:
+                tv.select_image(self.before["picture"], show=True)
+        except Exception as e:
+            raise OSError("Samsung Frame: %s" % e)
+        finally:
+            tv.close()
+        self.release()
+        print("restored", flush=True)
+
+    def release(self):
+        self.before = self.shown = self.art = self.made = self.quiet_since = None
+        self.cleanup()
+
+
 def seconds(clock):
     """ "0:03:25" -> 205; None for anything else (radio reports NOT_IMPLEMENTED)."""
     try:
@@ -285,7 +388,9 @@ class Room:
         self.name, self.tv = name, tv_address
         self.speaker = None      # found later: a speaker may be off, or not bought yet
         self.display = Display(fetch, room=name)
-        self.watcher = Watcher(Tv(tv_address), fetch) if tv_address else None
+        self.watcher = (None if not tv_address
+                        else FrameWatcher(tv_address[len("samsung:"):], fetch) if tv_address.startswith("samsung:")
+                        else Watcher(Tv(tv_address), fetch))
         self.held, self.heard = (None, None), 0   # the page keeps the cover through pauses shorter than the grace too
         self.clean = False
         self.error = None        # why the last round failed, for the settings page

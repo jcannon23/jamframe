@@ -40,8 +40,9 @@ Sonos speaker ──▶ watch.py (any always-on computer) ──▶ the TV in th
 page at `http://<this-computer>:8765/?room=<room name>` that draws the mat, cover, caption and lyrics, and
 animates when the album changes. Open that page on anything with a browser to see a room's screen.
 
-For TVs running [BetterFrame](https://github.com/spinogrizz/betterframe) (a replacement art mode with a local
-upload API), it also uploads a finished 4K still of the cover and switches the TV to it.
+For art TVs it instead uploads a finished 4K still of the cover and switches the TV to it: a Samsung Frame
+through its own art mode, a TCL art TV through [BetterFrame](https://github.com/spinogrizz/betterframe), a
+replacement art mode with a local upload API. Stills carry the print, not the caption, lyrics or waves.
 
 ## Quick start
 
@@ -147,12 +148,26 @@ that room's speaker is.
 |---|---|---|
 | Anything with a browser | Open the room's page full screen | Works |
 | A regular Google TV | The **JamFrame TV app** (`tv/`): opens the room's page by itself when music starts, and only when nobody is using the TV | Written and builds; not yet run on a TV |
+| A Samsung Frame | Its own art mode, over the home network: the cover is uploaded, shown, and the previous picture put back afterwards. Nothing to install on the TV | Upload and delete confirmed on a 2020 Frame (LS03T) |
 | A TCL art TV | [BetterFrame](https://github.com/spinogrizz/betterframe)'s art mode, fed finished stills | Written and checked against a stand-in TV; not yet run on a real one |
 
 `scripts/install-tv.sh <TV address> "<Sonos room>"` builds and installs the TV app.
 `scripts/install-betterframe.sh` installs BetterFrame, unmodified, from its own repository. Both need USB
 debugging turned on at the TV. What is left to prove on real TVs is listed in
 [docs/when-the-85QM6K-arrives.md](docs/when-the-85QM6K-arrives.md).
+
+### Samsung Frame
+
+In **Settings → Home & accounts → Rooms**, choose "Samsung Frame" for the room and enter the TV's address. The
+first time, the TV may ask you to allow "JamFrame": accept with the remote.
+
+- JamFrame only acts while the Frame is **showing art**. A Frame that is being watched, or is off, is left alone.
+- The picture goes into "My Photos" with no Samsung mat (the mat is in the picture), and is deleted again when
+  the music stops or the album changes. The art that was up before is put back.
+- A cover change takes a few seconds: the picture has to be uploaded first.
+- Samsung's own brightness, motion sensor and sleep keep working, since the TV never leaves its art mode.
+
+Samsung has changed this interface between model years; it is confirmed on a 2020 Frame only.
 
 ## In the box
 
@@ -180,7 +195,8 @@ Try the screens without Sonos: `python display.py one.jpg two.jpg` cycles throug
 
 ## Thanks
 
-[SoCo](https://github.com/SoCo/SoCo) for talking to Sonos, [BetterFrame](https://github.com/spinogrizz/betterframe)
+[SoCo](https://github.com/SoCo/SoCo) for talking to Sonos, [samsung-tv-ws-api](https://github.com/xchwarze/samsung-tv-ws-api)
+for talking to the Frame, [BetterFrame](https://github.com/spinogrizz/betterframe)
 for the art mode,
 [LRCLIB](https://lrclib.net) for the lyrics and [Open-Meteo](https://open-meteo.com) for the weather.
 

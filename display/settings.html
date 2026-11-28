@@ -66,6 +66,7 @@
   input[type=text], input[type=time] { font: inherit; color: inherit; background: var(--paper); border: 1px solid var(--line);
                                        border-radius: 4px; padding: 6px 8px; min-width: 0; }
   input[type=text] { flex: 1 1 150px; }
+  select { font: inherit; color: inherit; background: var(--paper); border: 1px solid var(--line); border-radius: 4px; padding: 6px 8px; }
   button { font: inherit; color: var(--ink); background: var(--paper); border: 1px solid var(--line); border-radius: 4px;
            padding: 8px 14px; cursor: pointer; }
   .room { padding: 10px 0; border-top: 1px solid var(--line); margin-top: 10px; }
@@ -94,7 +95,7 @@
   <div id="house">
     <section>
       <h2>Rooms</h2>
-      <p class="note">Sonos room name, exactly as in the Sonos app, and, for an art TV running BetterFrame, its address. Leave the address empty for a TV running the JamFrame TV app or showing the room's page in a browser.</p>
+      <p class="note">Sonos room name, exactly as in the Sonos app, and, for an art TV (a Samsung Frame, or a TCL running BetterFrame), its kind and address. Leave the address empty for a TV running the JamFrame TV app or showing the room's page in a browser.</p>
       <div id="rooms"></div>
       <div class="row"><button id="add">Add room</button></div>
       <datalist id="speakers"></datalist>
@@ -283,12 +284,14 @@ function roomRow(name, tv) {
   const link = el('a', { target: '_blank', textContent: 'Open page' });
   const n = el('input', { type: 'text', value: name, placeholder: 'Sonos room' });
   n.setAttribute('list', 'speakers'); n.dataset.was = name;
-  const t = el('input', { type: 'text', value: tv || '', placeholder: 'Art TV address, e.g. 192.168.1.50' });
+  const samsung = (tv || '').startsWith('samsung:');
+  const t = el('input', { type: 'text', value: (tv || '').replace(/^samsung:/, ''), placeholder: 'Art TV address, e.g. 192.168.1.50' });
+  const kind = el('select', {}, el('option', { value: '', textContent: 'TCL art TV (BetterFrame)' }), el('option', { value: 'samsung:', textContent: 'Samsung Frame', selected: samsung }));
   const row = el('div', { className: 'room' },
-    el('div', {}, n, t, link, el('button', { textContent: 'Remove', onclick: () => { row.remove(); rooms(); } })),
+    el('div', {}, n, kind, t, link, el('button', { textContent: 'Remove', onclick: () => { row.remove(); rooms(); } })),
     el('div', { className: 'note' }));
   const point = () => { link.href = './?room=' + encodeURIComponent(n.value.trim()); link.hidden = !n.value.trim(); };
-  n.oninput = point; n.onchange = t.onchange = rooms; point();
+  n.oninput = point; n.onchange = t.onchange = kind.onchange = rooms; point();
   return row;
 }
 
@@ -298,7 +301,7 @@ function rooms() {
   for (const row of $('rooms').children) {
     const [n, t] = row.querySelectorAll('input'), name = n.value.trim();
     if (!name) continue;
-    list[name] = t.value.trim() || null;
+    list[name] = t.value.trim() ? row.querySelector('select').value + t.value.trim() : null;
     if (conf.overrides[n.dataset.was]) overrides[name] = conf.overrides[n.dataset.was];
     n.dataset.was = name;
   }

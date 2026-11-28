@@ -58,7 +58,8 @@ LOOK = {                    # every one of these can be overridden per room
 }
 DEFAULTS = {
     **LOOK,
-    "rooms": {},            # Sonos room name -> address of that room's TV, or None
+    "rooms": {},            # Sonos room name -> its art TV: "192.168.1.50" (TCL with BetterFrame),
+                            # "samsung:192.168.1.60" (Samsung Frame), or None
     "overrides": {},        # Sonos room name -> {some LOOK settings}
     "ignore": [],           # sources that never take a screen: "linein", "radio"
     "pin": "",              # digits; when set, changing settings needs it
@@ -103,7 +104,7 @@ VALID = {
     "wave_color": lambda v: v in ("edges", "ink"),
     "rooms": lambda v: isinstance(v, dict) and all(
         isinstance(name, str) and 0 < len(name) <= 64
-        and (tv is None or isinstance(tv, str) and re.fullmatch(r"[A-Za-z0-9.-]{1,253}(:\d{1,5})?", tv))
+        and (tv is None or isinstance(tv, str) and re.fullmatch(r"(samsung:)?[A-Za-z0-9.-]{1,253}(:\d{1,5})?", tv))
         for name, tv in v.items()),
     "overrides": lambda v: isinstance(v, dict) and all(
         isinstance(name, str) and isinstance(o, dict) and all(k in LOOK and VALID[k](x) for k, x in o.items())

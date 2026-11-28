@@ -5,3 +5,5 @@ settings.json
 tv/build/
 tv/jamframe.keystore
 spotify.json
+frame-token-*
+frame.json

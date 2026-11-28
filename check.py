@@ -372,3 +372,46 @@ w.look = dict(w.look, scale=0.882)
 w.step("http://a/7", now=6006)
 assert len(ours()) == 1 and ours()[0] != first
 print("spotify ok")
+
+# a Samsung Frame, against a stand-in: only in art mode, the old picture back afterwards, our uploads deleted
+class FakeFrame:
+    state = {"mode": "on", "current": "MY_F0002", "pictures": ["MY_F0001", "MY_F0002"], "n": 10}
+    def __init__(self, address): pass
+    def close(self): pass
+    def get_artmode(self): return self.state["mode"]
+    def get_current(self): return {"content_id": self.state["current"]}
+    def upload(self, data, matte=None, portrait_matte=None, file_type=None):
+        assert Image.open(io.BytesIO(data)).size == (3840, 2160) and matte == "none" and file_type == "jpg"
+        self.state["n"] += 1
+        self.state["pictures"].append("MY_F%04d" % self.state["n"])
+        return self.state["pictures"][-1]
+    def select_image(self, content_id, show=True):
+        assert content_id in self.state["pictures"]
+        self.state["current"] = content_id
+    def delete_list(self, ids):
+        self.state["pictures"] = [p for p in self.state["pictures"] if p not in ids]
+        return True
+fs = FakeFrame.state
+fw = watch.FrameWatcher("10.0.0.5", fetch=lambda url: cover.getvalue(), connect=FakeFrame, memory=os.path.join(tempfile.mkdtemp(), "frame.json"))
+fw.step("http://a/1", now=0)
+assert fs["current"] == "MY_F0011" and fw.ours() == ["MY_F0011"]
+fw.step("http://a/2", now=10)                                   # next album: new picture up, the old upload gone
+assert fs["current"] == "MY_F0012" and fs["pictures"] == ["MY_F0001", "MY_F0002", "MY_F0012"]
+fw.step(None, now=20); fw.step(None, now=20 + watch.GRACE)      # silence: their picture back, ours deleted
+assert fs["current"] == "MY_F0002" and fs["pictures"] == ["MY_F0001", "MY_F0002"] and fw.ours() == [] and not fw.before
+fs["mode"] = "off"                                              # someone is watching TV: left alone
+fw.step("http://a/3", now=300)
+assert fs["pictures"] == ["MY_F0001", "MY_F0002"] and not fw.before
+fw.rest_until = 0; fs["mode"] = "on"; fw.step("http://a/3", now=400)
+fw2 = watch.FrameWatcher("10.0.0.5", connect=FakeFrame, memory=fw.memory)    # a crash, then a fresh start: leftovers cleared
+fw2.cleanup()
+assert fs["pictures"] == ["MY_F0001", "MY_F0002"]
+def unreachable(address): raise TimeoutError("timed out")
+fw3 = watch.FrameWatcher("10.0.0.6", connect=unreachable, memory=fw.memory)
+for attempt in range(2):                                        # a Frame that is off: an error, and no hammering
+    try:
+        fw3.step("http://a/1", now=0); raise SystemExit("no error from an unreachable Frame")
+    except OSError as e:
+        assert "10.0.0.6" in str(e)
+assert isinstance(watch.Room("F", "samsung:10.0.0.5", None).watcher, watch.FrameWatcher) and post({"rooms": {"F": "samsung:10.0.0.5"}}, ) in (204, 403)
+print("frame ok")
