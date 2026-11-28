@@ -35,6 +35,8 @@ reports to the port it names, or taking part in the network clock (`sclock`), an
 
 - `ADDCLI` changes a live audio system. Always pair it with `REMCLI`, and check with `STATUS` afterwards.
 - The server was briefly slow to answer during one subscription.
-- During the last attempt the stream ended. Whether the experiment ended it, or someone changed the source
-  in that room at that moment, was not established. Assume it can interrupt playback.
+- **It interrupted playback.** During the last attempt the stream ended, the music stopped, and the room
+  fell back to its previous source (a TV). Confirmed by the person in the room: they had touched nothing.
+  A half-working client appears to be worse for the stream than no client. Do not run this while anyone is
+  listening.
 - An analogue input on an amplifier may only become a network stream when another room shares it.
