@@ -28,6 +28,8 @@ class Control4:
             self.kept = {}
         self.error = None
         self.rooms = {}         # room id -> {"name", plus the variables in WANTED}: see poll()
+        self.gear = {}          # address -> room id, of the amplifiers and controllers: they serve the audio
+        self.sources = {}       # device id -> its name ("Turntable")
         self.rest_until, self.rooms_at = 0, 0
 
     @property
@@ -98,6 +100,10 @@ class Control4:
                 return
             names = {i["id"]: i.get("name", "") for i in items if i.get("type") in (8, "room") or i.get("typeName") == "room"}
             self.rooms = {i: dict(self.rooms.get(i, {}), name=n) for i, n in names.items()}
+            audio = ("triad", "core", "ea-", "amp", "matrix")
+            self.gear = {b["address"]: n.get("roomId") for n in self.get("/api/v1/items/network") or []
+                         if any(k in str(n.get("protocolName", "")).lower() for k in audio)
+                         for b in n.get("bindings", []) if b.get("address") and b.get("online")}
             self.rooms_at = time.time()
         values = self.get("/api/v1/items/variables?varnames=" + WANTED.replace(" ", "%20"))
         for v in values or []:
@@ -143,6 +149,35 @@ class Control4:
                 "info": {k: str(media.get(k) or "") for k in ("title", "artist", "album")},
                 "duration": now.get("duration_ms", 0) / 1000 or None, "station": media.get("channel") or None,
                 "next": after and {"title": after.get("track", ""), "artist": after.get("artist", "")}}
+
+    def source(self, room_id):
+        """The name of the source a room has selected ("Turntable"), or None when it is off."""
+        room = self.rooms.get(room_id) or {}
+        try:
+            device = int(room.get("CURRENT_SELECTED_DEVICE") or 0)
+        except ValueError:
+            return None
+        if str(room.get("POWER_STATE")) != "1" or not device:
+            return None
+        if device not in self.sources:
+            found = self.get("/api/v1/items/%d" % device)
+            if found is None:
+                return None
+            self.sources[device] = (found[0].get("name") if found else "") or ""
+        return self.sources[device]
+
+    def analogue_stream(self, room_id):
+        """(server address, stream id) of an analogue input that reaches this room over the network, or None.
+        A turntable is on the network only while a second room shares it: played in its own room alone,
+        the sound never leaves that room's amplifier."""
+        import c4audio
+        mine = {address for address, room in self.gear.items() if room == room_id}
+        for server in self.gear:
+            for stream, s in c4audio.streams(server, wait=2, tries=1).items():
+                heard_here = server in mine or any(c.split(":")[0] in mine for c in s["clients"])
+                if s["source"].startswith("dsp://") and heard_here:
+                    return server, stream
+        return None
 
     def status(self):
         return {"connected": self.connected, "error": self.error, "controller": self.kept.get("controller"),

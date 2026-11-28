@@ -43,10 +43,10 @@ def ask(server, text, wait=6.0, tries=4):
     return ""
 
 
-def streams(server):
+def streams(server, wait=6.0, tries=4):
     """The streams an audio server is playing: {id: {"source", "clients"}}."""
     found, current = {}, None
-    for line in ask(server, "STATUS").splitlines():
+    for line in ask(server, "STATUS", wait, tries).splitlines():
         line = line.replace("0001 STATUS", "").strip()
         if line.startswith("STREAM="):
             current = found.setdefault(int(line[7:]), {"source": "", "clients": [], "state": ""})

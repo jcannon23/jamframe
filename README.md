@@ -22,6 +22,9 @@ like the rest of the art on the wall. When the music stops, the TV goes back to 
   tempo. In Grooves the mat becomes a record that spins up when a song starts and winds down when it stops.
 - **Knows more with Spotify connected** (optional). Lyrics land on the line, the next song shows as this one
   ends, the caption can name the playlist and mark liked songs, and the settings page gets skip, pause and like.
+- **Names a record by listening to it.** A turntable on a Control4 system has no song information, so
+  JamFrame takes a few seconds of the room's sound off the network, has Shazam name it, and shows the
+  cover, song and artist like anything else.
 - **Works with SiriusXM, AirPlay and radio**, not just Spotify. The song's own cover rather than a channel
   logo, with the channel shown in a corner. See [What can play](#what-can-play).
 - **Fits the screen it's on.** A TV, a tablet on a shelf or a phone standing upright: the cover, mat, caption
@@ -139,8 +142,24 @@ In **Settings → Home & accounts → Control4**, enter the account's email and 
 address on your network. Control4 gives a pass that lasts a day and wants the password to renew it, so both
 are kept in `control4.json` on your computer, readable only by you and never sent to a page.
 
-Sources that carry no song, such as a turntable or a TV, show nothing. Confirmed on a Control4 Core 1 with
-Spotify Connect.
+Confirmed on a Control4 Core 1 with Spotify Connect.
+
+### Records
+
+A turntable carries no song information. Sources listed under **Name by ear** (by default, one called
+"Turntable") are recognised by sound instead: JamFrame joins the room's audio stream on the Control4 network
+for nine seconds, fingerprints what it hears on your computer, and puts the fingerprint to Shazam. It listens
+when a record starts and again when the song should be over, not continuously, and keeps the last song up
+through a quiet passage. The cover, song, artist, album, timing for lyrics and tempo all follow.
+
+- A record is only on the network **while a second room is playing it too**. Played in its own room alone,
+  the sound never leaves that room's amplifier.
+- This uses Shazam through the open-source [shazamio](https://github.com/shazamio/ShazamIO) library, not a
+  service Shazam offers to other programs. It may stop working without notice.
+- Joining Control4's audio is undocumented. How it works, and what can interrupt playback if done wrongly,
+  is in [docs/control4-audio-notes.md](docs/control4-audio-notes.md).
+
+Other sources with no song, such as a TV, show nothing.
 
 ## Spotify (optional)
 
@@ -194,7 +213,8 @@ fills the screen with no extra mat, the change does not flash, and brightness ma
 | `display/settings.html` | The settings page |
 | `spotify.py` | The optional Spotify link |
 | `control4.py` | The optional Control4 link |
-| `c4audio.py` | Listens to a Control4 room's audio over the network, for recognising records. Experimental: see `docs/control4-audio-notes.md` |
+| `c4audio.py` | Listens to a Control4 room's audio over the network: see `docs/control4-audio-notes.md` |
+| `recognise.py` | Names a song from a few seconds of sound, with Shazam |
 | `tempo.py` | A song's tempo: `python tempo.py "Artist" "Song"` |
 | `treat.py` | Cover in, finished 4K print out: `python treat.py cover.jpg out.jpg` |
 | `check.py` | Checks the lot against a stand-in TV: `python check.py` |

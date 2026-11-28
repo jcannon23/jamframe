@@ -392,6 +392,70 @@ def now_playing(room, ignore=()):
     return art, info, at if length or at else None, length or None, on_air
 
 
+class Spinner:
+    """Names the record a Control4 room is playing, by listening: a few seconds of the room's audio, taken off
+    the network (c4audio) and put to Shazam (recognise). It listens when a record starts and again when the
+    song should be over, not all the time. One song found carries a while: a quiet passage or a crackly groove
+    is no reason to blank the screen."""
+    hearing = threading.Lock()      # one listen at a time: an audio client has one pair of ports
+
+    def __init__(self):
+        self.found = None           # {"art", "info", "offset", "heard", "duration"} of the song last named
+        self.again, self.misses, self.busy = 0, 0, False
+
+    def tick(self, control4, room_id):
+        """Called every round while the room plays something with no name. Returns what to show, or None."""
+        if not self.busy and time.time() >= self.again:
+            self.busy = True
+            threading.Thread(target=self.listen, args=(control4, room_id), daemon=True).start()
+        return self.found
+
+    def listen(self, control4, room_id):
+        import socket
+
+        import c4audio
+        from recognise import recognise
+        try:
+            where = control4.analogue_stream(room_id)
+            if not where:               # nothing on the network: the room has it to itself, or the needle is up
+                self.again = time.time() + 30
+                return
+            probe = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            probe.connect((where[0], 6000))     # no packet is sent: this only finds our address on that network
+            me = probe.getsockname()[0]
+            probe.close()
+            with Spinner.hearing:
+                began = time.time()
+                sound = c4audio.listen(where[0], where[1], 9, me)
+            song = sound and recognise(sound)
+            if not song:
+                self.misses += 1
+                self.again = time.time() + 25
+                if self.misses >= 6:    # some minutes of nothing we know: the side is over, or it is not music
+                    self.found = None
+                return
+            hit = tempo.search(song["artist"], song["title"], song["album"]) or {}
+            length = hit.get("duration") or None
+            art = song["art"] or find_cover(song["artist"], song["title"], song["album"])
+            self.misses = 0
+            self.found = art and {"art": art, "info": {k: song[k] for k in ("title", "artist", "album")},
+                                  "offset": max(0, song["offset"]), "heard": began, "duration": length}
+            left = length - max(0, song["offset"]) - (time.time() - began) if length else 0
+            self.again = time.time() + (max(20, min(left + 8, 600)) if length else 90)   # as this song should end
+            print("heard:", song["title"], "by", song["artist"], flush=True)
+        except OSError as e:
+            self.again = time.time() + 60
+            print("listening failed:", e, flush=True)
+        finally:
+            self.busy = False
+
+    def stop(self):
+        self.found, self.again, self.misses = None, 0, 0
+
+
+spinners = {}    # Control4 room id -> its Spinner
+
+
 class Room:
     """One Sonos room: its animated page, and its TV's BetterFrame if it has one."""
 
@@ -426,6 +490,13 @@ class Room:
                 art = found and (found["art"] or find_cover(info["artist"], info["title"], info["album"]))
                 playing = art and (art, info, None, found["duration"], found["station"] and (found["station"], ""))
                 self.ahead = playing and found["next"]
+                named = control4.source(room_id) if control4 and room_id is not None and not found else None
+                if named and named in conf["by_ear"]:           # a record: no name comes with it, so listen
+                    spun = spinners.setdefault(room_id, Spinner()).tick(control4, room_id)
+                    playing = spun and (spun["art"], spun["info"], spun["offset"] + time.time() - spun["heard"],
+                                        spun["duration"], (named, ""))
+                elif room_id in spinners:
+                    spinners.pop(room_id).stop()
             if playing:
                 return playing
         return None

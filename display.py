@@ -67,6 +67,7 @@ DEFAULTS = {
     "pin": "",              # digits; when set, changing settings needs it
     "weather": {"on": False, "place": "", "unit": "F"},   # shown with the clock, and in a corner of a kept cover
     "spotify": {"client_id": ""},   # of your app at developer.spotify.com; see spotify.py
+    "by_ear": ["Turntable"],        # Control4 sources with no song of their own, named by listening: see recognise.py
 }
 REFERENCE = 75      # inches: the TV size the look settings are judged on when "same_size" is on
 PAGE = ["caption", "align", "fields", "size", "mute", "mat", "cover", "grain", "shift", "idle", "lyrics", "clock", "waves", "wave_level", "wave_color", "upnext", "station"]   # what a TV page needs
@@ -112,6 +113,7 @@ VALID = {
         isinstance(name, str) and isinstance(o, dict) and all(k in LOOK and VALID[k](x) for k, x in o.items())
         for name, o in v.items()),
     "ignore": lambda v: subset(v, ("linein", "radio")),
+    "by_ear": lambda v: isinstance(v, list) and all(isinstance(x, str) and 0 < len(x) <= 64 for x in v),
     "hears": lambda v: isinstance(v, dict) and all(
         isinstance(name, str) and isinstance(others, list) and all(isinstance(o, str) and 0 < len(o) <= 64 for o in others)
         for name, others in v.items()),

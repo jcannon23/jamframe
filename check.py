@@ -211,7 +211,7 @@ assert now["seconds"] == 9 and now["pin_set"] is True and "pin" not in now
 print("settings ok")
 
 # Spotify, against a stand-in for its two servers: sign-in, what is playing, the controls, and a room using it
-import os, stat
+import os, stat, time
 asked = []
 class FakeSpotify(BaseHTTPRequestHandler):
     def log_message(self, *a):
@@ -539,3 +539,36 @@ rate_bits = struct.unpack(">Q", made[18:26])[0]
 assert rate_bits >> 44 == 48000 and (rate_bits >> 36) & 31 == 23 and (rate_bits >> 41) & 7 == 1      # 48 kHz, 24-bit, stereo
 assert c4audio.flac([]) == b"" and c4audio.flac(sent[1:2]) == b""  # nothing whole: nothing
 print("c4audio ok")
+
+# a record in a Control4 room: no name comes with it, so the room is listened to and the song named
+import recognise as _recognise
+c4b = control4.Control4(os.path.join(tempfile.mkdtemp(), "c4.json"))
+c4b.rooms = {64: {"name": "Kitchen", "POWER_STATE": 1, "CURRENT_SELECTED_DEVICE": "411", "CURRENT MEDIA INFO": {"mediainfo": {"deviceid": 411}}}}
+c4b.sources = {411: "Turntable", 235: "AppleTV"}
+c4b.analogue_stream = lambda room_id: ("10.0.0.7", 0)
+heard_calls = []
+c4audio.listen = lambda server, stream, seconds, me: heard_calls.append((server, stream)) or b"fLaC-sound"
+_recognise.recognise = lambda sound, kind="flac": {"title": "Heartless", "artist": "Nathaniel Rateliff", "album": "South of Here", "art": "http://art/heartless", "offset": 40.0}
+_tempo.search = lambda *a: {"duration": 200}
+assert c4b.source(64) == "Turntable"
+kitchen = watch.Room("Kitchen", None, lambda url: b"jpeg"); kitchen.c4 = 64
+by_ear = dict(conf, by_ear=["Turntable"])
+kitchen.tick(by_ear, None, c4b)                                       # first round: nothing yet, a listen begins
+for wait in range(40):
+    if watch.spinners[64].found: break
+    time.sleep(0.05)
+kitchen.tick(by_ear, None, c4b)
+st = kitchen.display.page_state()
+assert (st["title"], st["artist"], st["duration"], st["source"]) == ("Heartless", "Nathaniel Rateliff", 200, "Turntable"), st
+assert 40 <= st["position"] < 43 and heard_calls == [("10.0.0.7", 0)]
+kitchen.tick(by_ear, None, c4b); kitchen.tick(by_ear, None, c4b)
+assert len(heard_calls) == 1                                          # it does not listen again until the song should be over
+c4b.rooms[64]["CURRENT_SELECTED_DEVICE"] = "235"                      # the room switches to the TV: not listened to
+kitchen.tick(by_ear, None, c4b)
+assert 64 not in watch.spinners and len(heard_calls) == 1
+c4b.rooms[64]["CURRENT_SELECTED_DEVICE"] = "411"
+kitchen2 = watch.Room("Kitchen", None, lambda url: b"jpeg"); kitchen2.c4 = 64
+kitchen2.tick(dict(conf, by_ear=[]), None, c4b)                       # naming by ear switched off
+assert 64 not in watch.spinners and kitchen2.display.page_state()["art"] is None
+_tempo.search = _search
+print("vinyl ok")

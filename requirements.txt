@@ -1,3 +1,4 @@
 soco
 Pillow
 samsungtvws
+shazamio

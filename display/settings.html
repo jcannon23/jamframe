@@ -117,7 +117,9 @@
         <div class="row"><span class="name">Controller</span><input type="text" id="c4-addr" placeholder="Its address, e.g. 192.168.1.136"></div>
         <div class="row"><button id="c4-connect">Connect Control4</button></div>
       </div>
+      <div class="row"><span class="name">Name by ear</span><input type="text" id="c4-ear" placeholder="Sources with no song info, e.g. Turntable"></div>
       <div class="row"><button id="c4-off" hidden>Disconnect</button></div>
+      <p class="note">Sources listed under “Name by ear” are recognised by listening: a few seconds of the room's sound, taken from the Control4 network, are fingerprinted here and the fingerprint is put to Shazam. A record is only on the network while a second room is playing it too.</p>
       <p class="note">For homes where Control4 plays the music. Control4 gives a pass that lasts a day and wants the password to renew it, so JamFrame keeps your email and password in a file on this computer that only you can read. Best entered on the computer JamFrame runs on.</p>
     </section>
     <section>
@@ -352,6 +354,7 @@ async function save(kept) {
   conf.ignore = [...$('ignore').querySelectorAll('input')].filter(i => i.checked).map(i => i.value);
   const picked = id => $(id).querySelector('input:checked').value;
   conf.spotify = { client_id: $('sp-id').value.trim() };
+  conf.by_ear = $('c4-ear').value.split(',').map(x => x.trim()).filter(Boolean);
   conf.weather = { on: picked('wx-on') === 'on', place: $('wx-place').value.trim(), unit: picked('wx-unit') };
   const { transitions, speakers, pin_set, ...body } = conf;
   status.className = ''; status.textContent = 'Saving…';
@@ -439,6 +442,7 @@ async function watch() {
     status.className = r.ok ? '' : 'bad'; status.textContent = r.ok ? '' : 'Spotify did not take that.';
     setTimeout(watch, 700);
   };
+  $('c4-ear').value = (conf.by_ear || []).join(', '); $('c4-ear').onchange = () => save(true);
   $('c4-connect').onclick = async () => {
     $('c4-note').className = 'note'; $('c4-note').textContent = 'Signing in…';
     const r = await send('control4', { action: 'connect', username: $('c4-user').value.trim(), password: $('c4-pass').value, address: $('c4-addr').value.trim() });
