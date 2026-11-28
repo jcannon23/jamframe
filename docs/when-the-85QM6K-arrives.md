@@ -1,4 +1,4 @@
-# Pickup list: the 85QM6K (and the other TVs)
+# Pickup list: the TVs (85QM6K, CanvasTV 75S7SG, 75A300L)
 
 Nothing below can be done until a TV is on the same network as the computer running the watcher.
 
@@ -42,6 +42,27 @@ Nothing below can be done until a TV is on the same network as the computer runn
   uses); decide once we see how the TV behaves.
 - **Backlight**: the page dims the picture, not the panel. See whether the QM6K's own picture settings or
   light sensor are enough.
+
+## The Hisense CanvasTV (75S7SG)
+
+A Google TV, so it takes the same route as the 85QM6K: `scripts/install-tv.sh <TV IP> "<Sonos room name>"`, then
+the same eight checks in the table above. BetterFrame does not apply: it is written against TCL's internals.
+
+Extra checks for this TV:
+
+| Check | How | If it fails |
+|---|---|---|
+| JamFrame sees Hisense's art mode as "nobody is using the TV" | Leave the TV showing its art, start music | `Watch.free()` only knows asleep, screensaver and home screen. Find what the art mode is (`adb shell dumpsys activity activities` and `dumpsys dreams` while art is up) and add its package to what counts as free |
+| Hisense's art mode comes back when the music stops | Stop music, wait the grace time | The app only closes its own screen; the TV may land on the home screen instead |
+| The motion sensor still works afterwards | Leave the room after music stops | — |
+| Brightness next to Hisense's own art | Compare by eye | Lower Brightness for this room in settings; the app cannot use the art mode's own dimming |
+
+Known about this TV: its art mode has a built-in uploader on the home network (the TV shows a QR code; the page
+is on port 19637 behind a temporary code), documented by one project for the 2024 S7N. It needs the TV's menus
+driven for every picture, so it is no way to change covers per song. Not planned.
+
+While JamFrame shows a cover the motion sensor is not in charge: the cover stays up as long as music plays,
+with or without anyone in the room.
 
 ## The art TV (75A300L)
 
