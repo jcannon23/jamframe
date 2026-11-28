@@ -215,12 +215,13 @@ class Display:
                 **{k: self.extra.get(k) if self.url else None for k in ("next", "liked", "source", "station")}}
 
 
-def serve(displays, port=PORT, speakers=(), path=SETTINGS, status=None, weather=None, spotify=None):
+def serve(displays, port=PORT, speakers=(), path=SETTINGS, status=None, weather=None, spotify=None, control4=None):
     """displays: room name -> Display. With no ?room= the first room answers.
     speakers: names of the Sonos rooms found, offered on the settings page.
     status: () -> what each room is doing, for the settings page.
     weather: () -> the weather now, or None; see watch.find_weather.
-    spotify: a spotify.Spotify, for signing in and the controls on the settings page."""
+    spotify: a spotify.Spotify, for signing in and the controls on the settings page.
+    control4: a control4.Control4, for signing in from the settings page."""
 
     def page(name):
         with open(os.path.join(HERE, "display", name), "rb") as f:
@@ -273,6 +274,8 @@ def serve(displays, port=PORT, speakers=(), path=SETTINGS, status=None, weather=
                                       "weather": weather() if weather else None})
             elif url.path == "/spotify/status":
                 body, kind = as_json(dict(spotify.status() if spotify else {"connected": False}, configured=bool(client), redirect=back))
+            elif url.path == "/control4/status":
+                body, kind = as_json(control4.status() if control4 else {"connected": False})
             elif url.path == "/weather":
                 body, kind = as_json(weather() if weather else None)
             elif cover:
@@ -289,7 +292,7 @@ def serve(displays, port=PORT, speakers=(), path=SETTINGS, status=None, weather=
 
         def do_POST(self):
             # JSON only: a web page elsewhere cannot send that here without a preflight we never answer
-            if self.path not in ("/settings.json", "/play", "/spotify") or self.headers.get("Content-Type") != "application/json":
+            if self.path not in ("/settings.json", "/play", "/spotify", "/control4") or self.headers.get("Content-Type") != "application/json":
                 return self.send_error(404)
             pin = settings(path)["pin"]
             if pin and not hmac.compare_digest(pin.encode(), (self.headers.get("X-Pin") or "").encode()):
@@ -298,6 +301,16 @@ def serve(displays, port=PORT, speakers=(), path=SETTINGS, status=None, weather=
                 body = json.loads(self.rfile.read(int(self.headers.get("Content-Length") or 0)))
                 if self.path == "/play":
                     displays[body["room"]].play(body.get("transition"))
+                elif self.path == "/control4":
+                    if not control4:
+                        raise ValueError("no Control4 link")
+                    if body["action"] == "disconnect":
+                        control4.disconnect()
+                    else:
+                        address = str(body["address"])
+                        if not re.fullmatch(r"[A-Za-z0-9.-]{1,253}", address):
+                            raise ValueError("not an address")
+                        control4.sign_in(str(body["username"]), str(body["password"]), address)
                 elif self.path == "/spotify":
                     if not spotify:
                         raise ValueError("no Spotify link")

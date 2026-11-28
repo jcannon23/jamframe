@@ -467,10 +467,11 @@ if __name__ == "__main__":
             room.watcher.restore()
 
     weather = {}     # read by the pages; refreshed in the loop below so a slow answer never holds a page up
+    from control4 import Control4
     from spotify import Spotify
-    spot = Spotify()
+    spot, c4 = Spotify(), Control4()
     serve(displays, speakers=speakers, status=lambda: {name: r.status() for name, r in list(rooms.items())},
-          weather=lambda: weather.get("now"), spotify=spot)
+          weather=lambda: weather.get("now"), spotify=spot, control4=c4)
     signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))   # so `finally` runs under launchd too
     print("settings at http://localhost:%d/settings" % PORT, flush=True)
     looked = 0
@@ -478,6 +479,8 @@ if __name__ == "__main__":
         while True:
             conf = settings()        # re-read every round: the settings page changes it
             weather["now"] = find_weather(conf["weather"])
+            if c4.connected:
+                c4.poll()
             if conf["spotify"]["client_id"] and spot.connected:
                 spot.poll(conf["spotify"]["client_id"])
             for name in [n for n, r in rooms.items() if n not in conf["rooms"] or conf["rooms"][n] != r.tv]:

@@ -109,6 +109,18 @@
       <p class="note">Once: at developer.spotify.com create an app, give it the redirect address <b id="sp-back"></b>, tick Web API, and paste its Client ID here. Connect from the computer JamFrame runs on.</p>
     </section>
     <section>
+      <h2>Control4</h2>
+      <p class="note" id="c4-note"></p>
+      <div id="c4-form">
+        <div class="row"><span class="name">Email</span><input type="text" id="c4-user" autocomplete="username" placeholder="Your Control4 account"></div>
+        <div class="row"><span class="name">Password</span><input type="password" id="c4-pass" autocomplete="current-password" style="flex: 1 1 150px; font: inherit; padding: 6px 8px; border: 1px solid var(--line); border-radius: 4px; background: var(--paper)"></div>
+        <div class="row"><span class="name">Controller</span><input type="text" id="c4-addr" placeholder="Its address, e.g. 192.168.1.136"></div>
+        <div class="row"><button id="c4-connect">Connect Control4</button></div>
+      </div>
+      <div class="row"><button id="c4-off" hidden>Disconnect</button></div>
+      <p class="note">For homes where Control4 plays the music. Control4 gives a pass that lasts a day and wants the password to renew it, so JamFrame keeps your email and password in a file on this computer that only you can read. Best entered on the computer JamFrame runs on.</p>
+    </section>
+    <section>
       <h2>Weather</h2>
       <div class="row"><span class="name">Weather</span><div class="chips" id="wx-on"></div></div>
       <div class="row"><span class="name">Place</span><input type="text" id="wx-place" maxlength="80" placeholder="Town, e.g. Portland, Oregon"></div>
@@ -370,6 +382,14 @@ async function watch() {
     row.lastChild.className = 'note' + (state && state[name] && (state[name].error || !state[name].speaker) ? ' bad' : '');
   }
   try {
+    const c = await (await fetch('control4/status', { cache: 'no-store' })).json();
+    $('c4-form').hidden = c.connected; $('c4-off').hidden = !c.connected;
+    if (c.connected || !$('c4-note').textContent || $('c4-note').textContent.startsWith('Connected')) {
+      $('c4-note').className = 'note' + (c.error ? ' bad' : '');
+      $('c4-note').textContent = c.error ? 'Problem: ' + c.error : c.connected ? `Connected to the controller at ${c.address}. Rooms: ${c.rooms.join(', ') || 'none found yet'}.` : '';
+    }
+  } catch (e) {}
+  try {
     const sp = await (await fetch('spotify/status', { cache: 'no-store' })).json();
     $('sp-back').textContent = sp.redirect;
     $('sp-note').className = 'note' + (sp.error ? ' bad' : '');
@@ -414,6 +434,13 @@ async function watch() {
     status.className = r.ok ? '' : 'bad'; status.textContent = r.ok ? '' : 'Spotify did not take that.';
     setTimeout(watch, 700);
   };
+  $('c4-connect').onclick = async () => {
+    $('c4-note').className = 'note'; $('c4-note').textContent = 'Signing in…';
+    const r = await send('control4', { action: 'connect', username: $('c4-user').value.trim(), password: $('c4-pass').value, address: $('c4-addr').value.trim() });
+    $('c4-pass').value = '';
+    if (!r.ok) { $('c4-note').className = 'note bad'; $('c4-note').textContent = 'Not connected: check the email, password and controller address.'; } else watch();
+  };
+  $('c4-off').onclick = async () => { await send('control4', { action: 'disconnect' }); watch(); };
   const pinNote = () => { $('pinnote').textContent = conf.pin_set ? 'A PIN is set: changing settings from a new device asks for it.' : 'No PIN: anyone on your network can change these settings.'; };
   $('setpin').onclick = async () => {
     const value = $('pin').value.trim();

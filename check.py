@@ -435,3 +435,47 @@ fw4.look = dict(fw4.look, caption=False); fw4.step("http://a/1", now=9, info={"t
 fw4.step("http://a/1", now=12, info={"title": "Four", "artist": "A", "album": "B"})
 assert fs["current"] == third                                   # caption off: the still is the album's again
 print("frame ok")
+
+# Control4, against a stand-in for its cloud and for a controller: sign-in, a refused one, and reading rooms
+class FakeC4(BaseHTTPRequestHandler):
+    def log_message(self, *a):
+        pass
+    def answer(self, obj, code=200):
+        self.send_response(code); self.end_headers(); self.wfile.write(json.dumps(obj).encode())
+    def do_POST(self):
+        body = json.loads(self.rfile.read(int(self.headers.get("Content-Length") or 0)))
+        if self.path == "/authentication/v1/rest":
+            good = body["clientInfo"]["userInfo"]["password"] == "right"
+            return self.answer({"authToken": {"token": "ACCOUNT"}} if good else {"C4ErrorResponse": {"code": 401}}, 200 if good else 401)
+        assert self.headers["Authorization"] == "Bearer ACCOUNT" and body["serviceInfo"]["commonName"] == "control4_ea5_ABC"
+        self.answer({"authToken": {"token": "DIRECTOR", "validSeconds": 86400}})
+    def do_GET(self):
+        if self.path == "/account/v3/rest/accounts":
+            return self.answer({"account": {"controllerCommonName": "control4_ea5_ABC"}})
+        if self.headers.get("Authorization") != "Bearer DIRECTOR":
+            return self.answer({"error": "Unauthorized"}, 401)
+        if self.path == "/api/v1/categories/rooms":
+            return self.answer([{"id": 10, "name": "Family Room", "type": 8}, {"id": 11, "name": "Kitchen", "type": 8}, {"id": 99, "name": "A light", "type": 7}])
+        self.answer([{"id": 10, "varName": "CURRENT MEDIA INFO", "value": {"mediainfo": {"title": "Dreams"}}}, {"id": 10, "varName": "PLAYING", "value": 1}])
+cloud = HTTPServer(("127.0.0.1", 0), FakeC4)
+threading.Thread(target=cloud.serve_forever, daemon=True).start()
+os.environ["CONTROL4_CLOUD"] = "http://127.0.0.1:%d" % cloud.server_port
+import control4
+c4path = os.path.join(tempfile.mkdtemp(), "control4.json")
+c4 = control4.Control4(c4path)
+try:
+    c4.sign_in("me@example.com", "wrong", "10.0.0.9"); raise SystemExit("a wrong password was accepted")
+except ValueError:
+    assert not c4.connected and not os.path.exists(c4path)
+c4.sign_in("me@example.com", "right", "10.0.0.9")
+assert c4.connected and stat.S_IMODE(os.stat(c4path).st_mode) == 0o600 and control4.Control4(c4path).kept["controller"] == "control4_ea5_ABC"
+assert "right" not in json.dumps(c4.status()) and c4.status()["connected"]
+import requests as _requests
+real_get = _requests.get            # the controller is asked over https; the stand-in speaks http
+_requests.get = lambda url, **kw: real_get(url.replace("https://10.0.0.9", "http://127.0.0.1:%d" % cloud.server_port), **kw)
+c4.poll()
+_requests.get = real_get
+assert c4.status()["rooms"] == ["Family Room", "Kitchen"] and c4.rooms[10]["PLAYING"] == 1 and c4.rooms[10]["CURRENT MEDIA INFO"]["mediainfo"]["title"] == "Dreams"
+c4.disconnect()
+assert not c4.connected and not os.path.exists(c4path)
+print("control4 ok")
