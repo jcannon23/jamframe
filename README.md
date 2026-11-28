@@ -148,7 +148,7 @@ that room's speaker is.
 |---|---|---|
 | Anything with a browser | Open the room's page full screen | Works |
 | A regular Google TV | The **JamFrame TV app** (`tv/`): opens the room's page by itself when music starts, and only when nobody is using the TV | Written and builds; not yet run on a TV |
-| A Samsung Frame | Its own art mode, over the home network: the cover is uploaded, shown, and the previous picture put back afterwards. Nothing to install on the TV | Upload and delete confirmed on a 2020 Frame (LS03T) |
+| A Samsung Frame | Its own art mode, over the home network: the cover is uploaded, shown, and the previous picture put back afterwards. Nothing to install on the TV | Works: shown, restored and cleaned up on a 2020 Frame (LS03T), no flash on the change |
 | A TCL art TV | [BetterFrame](https://github.com/spinogrizz/betterframe)'s art mode, fed finished stills | Written and checked against a stand-in TV; not yet run on a real one |
 
 `scripts/install-tv.sh <TV address> "<Sonos room>"` builds and installs the TV app.
@@ -167,7 +167,8 @@ first time, the TV may ask you to allow "JamFrame": accept with the remote.
 - A cover change takes a few seconds: the picture has to be uploaded first.
 - Samsung's own brightness, motion sensor and sleep keep working, since the TV never leaves its art mode.
 
-Samsung has changed this interface between model years; it is confirmed on a 2020 Frame only.
+Samsung has changed this interface between model years. It is confirmed on a 2020 Frame (QN75LS03T): the print
+fills the screen with no extra mat, the change does not flash, and brightness matches the TV's other art.
 
 ## In the box
 
