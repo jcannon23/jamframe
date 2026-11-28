@@ -156,11 +156,44 @@ class FrameWatcher(Watcher):
     shown, and afterwards the picture that was up is put back and ours deleted. Nothing is installed on the TV.
     It only ever acts while the TV is showing art: a Frame that is being watched, or is off, is left alone."""
 
-    def __init__(self, address, fetch=None, connect=None, memory=FRAMES):
+    def __init__(self, address, fetch=None, connect=None, memory=FRAMES, power=None, knock=None):
         super().__init__(None, fetch)
         self.address, self.memory = address, memory
         self.connect = connect      # address -> an open samsungtvws SamsungTVArt (or a stand-in, in check.py)
         self.rest_until, self.why = 0, None
+        self.wake = False           # may music wake this TV when it is asleep? (settings' "wake")
+        self.woke = 0               # when we last sent it a wake-up
+        self.power = power or self.ask_power
+        self.knock = knock or self.wake_on_lan
+
+    def ask_power(self):
+        """ "on", "standby", or None when the TV answers nothing (older Frames leave the network when off).
+        While it is awake, its hardware address is noted: waking it later needs that, and a sleeping TV cannot say."""
+        try:
+            device = json.loads(urllib.request.urlopen("http://%s:8001/api/v2/" % self.address, timeout=2).read())["device"]
+        except (OSError, ValueError, KeyError):
+            return None
+        if device.get("wifiMac") and self.ours(key="mac ") != device["wifiMac"]:
+            self.ours(device["wifiMac"], key="mac ")
+        return device.get("PowerState", "on")
+
+    def wake_on_lan(self):
+        """Send the TV a wake-on-LAN packet, the standard "switch on" over a network. False without its address."""
+        import socket
+        mac = self.ours(key="mac ")
+        if not mac:
+            return False
+        packet = b"\xff" * 6 + bytes.fromhex(mac.replace(":", "").replace("-", "")) * 16
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+        try:
+            for to in ("255.255.255.255", self.address.rsplit(".", 1)[0] + ".255", self.address):
+                s.sendto(packet, (to, 9))
+        except OSError:
+            return False
+        finally:
+            s.close()
+        return True
 
     def frame(self):
         """An open connection to the TV. After a failure, the next tries are refused for a while without
@@ -181,18 +214,19 @@ class FrameWatcher(Watcher):
             self.rest_until, self.why = time.time() + 30, "Samsung Frame at %s: %s" % (self.address, e or type(e).__name__)
             raise OSError(self.why)
 
-    def ours(self, keep=...):
-        """The pictures we have uploaded to this TV and not yet deleted; with keep, set that list."""
+    def ours(self, keep=..., key=""):
+        """The pictures we have uploaded to this TV and not yet deleted; with keep, set that list.
+        With key "mac ", the TV's hardware address instead, kept in the same file."""
         try:
             with open(self.memory) as f:
                 known = json.load(f)
         except (OSError, ValueError):
             known = {}
         if keep is not ...:
-            known[self.address] = keep
+            known[key + self.address] = keep
             with open(self.memory, "w") as f:
                 json.dump(known, f)
-        return known.get(self.address, [])
+        return known.get(key + self.address, None if key else [])
 
     def cleanup(self, keep=None):
         """Delete covers we uploaded, including ones a crashed run left behind."""
@@ -208,8 +242,22 @@ class FrameWatcher(Watcher):
         self.ours([keep] if keep else [])
 
     def show(self, art):
+        if time.time() < self.rest_until:
+            if self.why:
+                raise OSError(self.why)
+            return                              # it is being watched: asked again shortly, quietly
+        if self.power() != "on":                # asleep: wake it if we may, and come back when it has had time
+            if self.wake and self.knock():
+                self.woke = time.time()
+                self.rest_until, self.why = time.time() + 6, "Samsung Frame at %s: waking it" % self.address
+            else:
+                self.rest_until, self.why = time.time() + 30, "Samsung Frame at %s: it is asleep" % self.address
+            raise OSError(self.why)
         tv = self.frame()
         try:
+            if tv.get_artmode() != "on" and time.time() - self.woke < 120:
+                tv.set_artmode("on")            # we woke it a moment ago, so nobody is watching: on to its art
+                time.sleep(2)
             if tv.get_artmode() != "on":        # someone is watching TV (or just switched to it mid-album)
                 self.rest_until, self.why = time.time() + 15, None
                 if self.before:
@@ -542,7 +590,7 @@ class Room:
                     threading.Thread(target=look_up, daemon=True).start()
         self.display.update(*(self.held if time.time() - self.heard < mine["grace"] else (None, None)))
         if self.watcher:
-            self.watcher.grace, self.watcher.look = mine["grace"], look(mine)
+            self.watcher.grace, self.watcher.look, self.watcher.wake = mine["grace"], look(mine), mine["wake"]
             self.watcher.step(playing and playing[0], info=playing and playing[1])
 
     def status(self):

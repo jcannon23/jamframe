@@ -392,7 +392,7 @@ class FakeFrame:
         self.state["pictures"] = [p for p in self.state["pictures"] if p not in ids]
         return True
 fs = FakeFrame.state
-fw = watch.FrameWatcher("10.0.0.5", fetch=lambda url: cover.getvalue(), connect=FakeFrame, memory=os.path.join(tempfile.mkdtemp(), "frame.json"))
+fw = watch.FrameWatcher("10.0.0.5", fetch=lambda url: cover.getvalue(), connect=FakeFrame, power=lambda: "on", memory=os.path.join(tempfile.mkdtemp(), "frame.json"))
 fw.step("http://a/1", now=0)
 assert fs["current"] == "MY_F0011" and fw.ours() == ["MY_F0011"]
 fw.step("http://a/2", now=10)                                   # next album: new picture up, the old upload gone
@@ -403,11 +403,11 @@ fs["mode"] = "off"                                              # someone is wat
 fw.step("http://a/3", now=300)
 assert fs["pictures"] == ["MY_F0001", "MY_F0002"] and not fw.before
 fw.rest_until = 0; fs["mode"] = "on"; fw.step("http://a/3", now=400)
-fw2 = watch.FrameWatcher("10.0.0.5", connect=FakeFrame, memory=fw.memory)    # a crash, then a fresh start: leftovers cleared
+fw2 = watch.FrameWatcher("10.0.0.5", connect=FakeFrame, power=lambda: "on", memory=fw.memory)    # a crash, then a fresh start: leftovers cleared
 fw2.cleanup()
 assert fs["pictures"] == ["MY_F0001", "MY_F0002"]
 def unreachable(address): raise TimeoutError("timed out")
-fw3 = watch.FrameWatcher("10.0.0.6", connect=unreachable, memory=fw.memory)
+fw3 = watch.FrameWatcher("10.0.0.6", connect=unreachable, power=lambda: "on", memory=fw.memory)
 for attempt in range(2):                                        # a Frame that is off: an error, and no hammering
     try:
         fw3.step("http://a/1", now=0); raise SystemExit("no error from an unreachable Frame")
@@ -424,7 +424,7 @@ assert treat(red, {"grain": False, "fields": ["album"]}, {"title": "Brown Sugar"
 long = treat(red, {"grain": False}, {"title": "A very long song title " * 12})
 assert long.crop((0, 1760, 1100, 1960)).getcolors(1), "caption ran wider than the cover"
 fs.update(mode="on", current="MY_F0002", pictures=["MY_F0001", "MY_F0002"])
-fw4 = watch.FrameWatcher("10.0.0.5", fetch=lambda url: cover.getvalue(), connect=FakeFrame, memory=os.path.join(tempfile.mkdtemp(), "frame.json"))
+fw4 = watch.FrameWatcher("10.0.0.5", fetch=lambda url: cover.getvalue(), connect=FakeFrame, power=lambda: "on", memory=os.path.join(tempfile.mkdtemp(), "frame.json"))
 fw4.look = {"caption": True, "fields": ["title", "artist"], "align": "center", "size": "medium"}
 fw4.step("http://a/1", now=0, info={"title": "One", "artist": "A", "album": "B"}); first = fs["current"]
 fw4.step("http://a/1", now=3, info={"title": "One", "artist": "A", "album": "B"})
@@ -434,6 +434,39 @@ assert fs["current"] != first and len(fs["pictures"]) == 3      # next song, sam
 fw4.look = dict(fw4.look, caption=False); fw4.step("http://a/1", now=9, info={"title": "Three", "artist": "A", "album": "B"}); third = fs["current"]
 fw4.step("http://a/1", now=12, info={"title": "Four", "artist": "A", "album": "B"})
 assert fs["current"] == third                                   # caption off: the still is the album's again
+
+# waking a sleeping Frame: only when allowed, only when asleep, and on to its art afterwards
+fs.update(mode="off", current="MY_F0002", pictures=["MY_F0001", "MY_F0002"])
+asleep, knocks = ["standby"], []
+FakeFrame.set_artmode = lambda self, mode: fs.update(mode=mode)
+def knock():
+    knocks.append(1); asleep[0] = "on"; return True         # the stand-in wakes at once, into TV mode
+fw5 = watch.FrameWatcher("10.0.0.5", fetch=lambda url: cover.getvalue(), connect=FakeFrame, power=lambda: asleep[0], knock=knock,
+                         memory=os.path.join(tempfile.mkdtemp(), "frame.json"))
+try:
+    fw5.step("http://a/1", now=0); raise SystemExit("an asleep TV was not reported")
+except OSError as e:
+    assert "asleep" in str(e) and not knocks and fs["mode"] == "off"       # waking not allowed: left asleep
+fw5.wake, fw5.rest_until = True, 0
+try:
+    fw5.step("http://a/1", now=5); raise SystemExit("waking was not reported")
+except OSError as e:
+    assert "waking" in str(e) and knocks == [1]
+fw5.rest_until = 0
+real_sleep, time.sleep = time.sleep, lambda s: None
+fw5.step("http://a/1", now=12)
+time.sleep = real_sleep
+assert fs["mode"] == "on" and fs["current"] not in ("MY_F0001", "MY_F0002") and fw5.before == {"picture": "MY_F0002"}
+fs.update(mode="off")                                       # later, awake and showing TV, long after any wake-up: someone is watching
+fw6 = watch.FrameWatcher("10.0.0.5", fetch=lambda url: cover.getvalue(), connect=FakeFrame, power=lambda: "on", knock=knock,
+                         memory=os.path.join(tempfile.mkdtemp(), "frame.json"))
+fw6.wake = True
+fw6.step("http://a/1", now=0)
+assert fs["mode"] == "off" and len(knocks) == 1 and not fw6.before
+no_mac = watch.FrameWatcher("10.0.0.99", memory=os.path.join(tempfile.mkdtemp(), "frame.json"))
+assert no_mac.wake_on_lan() is False and no_mac.ours(key="mac ") is None    # never seen awake: nothing to wake it with
+no_mac.ours("aa:bb:cc:dd:ee:ff", key="mac ")
+assert no_mac.ours(key="mac ") == "aa:bb:cc:dd:ee:ff" and no_mac.ours() == []
 print("frame ok")
 
 # Control4, against a stand-in for its cloud and for a controller: sign-in, a refused one, and reading rooms

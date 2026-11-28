@@ -188,6 +188,8 @@ const SPEC = () => [
   ['TV size', [
     { k: 'inches', name: 'This TV', range: [40, 100, 1], fmt: v => v + ' in',
       note: 'Pick a room at the top first, then set its TV\u2019s size.' },
+    { k: 'wake', name: 'Wake the TV', chips: ONOFF,
+      note: 'Samsung Frame only. When music starts and the TV is asleep, switch it on to its art. A TV that is on and showing something else is never touched. Afterwards it is left on its art; its own motion sensor and sleep timer turn it off again.' },
     { k: 'same_size', name: 'Same real size', chips: ONOFF,
       note: 'Off: the cover takes the same share of every screen, so it is bigger on a bigger TV. On: the cover, caption, clock and lyrics are the same size in inches on every TV, as they would be on a 75-inch one. A smaller share of an 85-inch, a larger share of a 65-inch.' },
   ]],

@@ -43,6 +43,7 @@ LOOK = {                    # every one of these can be overridden per room
     "cover": 0.62,          # cover edge as a share of screen height
     "inches": 75,           # the TV's size, corner to corner: set per room
     "same_size": False,     # True: everything is as big in real inches on this TV as on a 75-inch one
+    "wake": False,          # True: music wakes this room's Samsung Frame when it is asleep (never when it is being watched)
     "grain": True,
     "brightness": 1,
     "night": {"on": False, "from": "21:00", "to": "07:00", "brightness": 0.3},
@@ -91,6 +92,7 @@ VALID = {
     "cover": lambda v: number(v, 0.3, 0.8),
     "inches": lambda v: number(v, 20, 150),
     "same_size": lambda v: isinstance(v, bool),
+    "wake": lambda v: isinstance(v, bool),
     "grain": lambda v: isinstance(v, bool),
     "brightness": lambda v: number(v, 0.05, 1),
     "night": lambda v: window(v, ("brightness",)) and number(v["brightness"], 0.05, 1),

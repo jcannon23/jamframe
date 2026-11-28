@@ -198,6 +198,9 @@ first time, the TV may ask you to allow "JamFrame": accept with the remote.
 - The picture goes into "My Photos" with no Samsung mat (the mat is in the picture), and is deleted again when
   the music stops or the album changes. The art that was up before is put back.
 - A cover change takes a few seconds: the picture has to be uploaded first.
+- With **Wake the TV** on (Settings → Screen & idle → TV size), music wakes a Frame that is asleep, using
+  wake-on-LAN, and switches it to its art. JamFrame has to have seen the TV awake once, to learn its hardware
+  address. Afterwards the TV is left on its art; its own motion sensor and sleep timer turn it off.
 - Samsung's own brightness, motion sensor and sleep keep working, since the TV never leaves its art mode.
 
 Samsung has changed this interface between model years. It is confirmed on a 2020 Frame (QN75LS03T): the print
