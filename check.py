@@ -414,4 +414,24 @@ for attempt in range(2):                                        # a Frame that i
     except OSError as e:
         assert "10.0.0.6" in str(e)
 assert isinstance(watch.Room("F", "samsung:10.0.0.5", None).watcher, watch.FrameWatcher) and post({"rooms": {"F": "samsung:10.0.0.5"}}, ) in (204, 403)
+
+# captions on stills: the words are printed under the cover, and a new song on the same album remakes the still
+plain, worded = treat(red, {"grain": False}), treat(red, {"grain": False}, {"title": "Brown Sugar", "artist": "The Rolling Stones", "album": "Sticky Fingers"})
+below = (1250, 1860, 2590, 1960)        # a strip under the cover, clear of its shadow: the artist's line runs through it
+assert plain.crop(below).getcolors(1) and not worded.crop(below).getcolors(1)       # one flat colour without, not with
+assert treat(red, {"grain": False, "caption": False}, {"title": "Brown Sugar"}).crop(below).getcolors(1)
+assert treat(red, {"grain": False, "fields": ["album"]}, {"title": "Brown Sugar", "album": ""}).crop(below).getcolors(1)
+long = treat(red, {"grain": False}, {"title": "A very long song title " * 12})
+assert long.crop((0, 1760, 1100, 1960)).getcolors(1), "caption ran wider than the cover"
+fs.update(mode="on", current="MY_F0002", pictures=["MY_F0001", "MY_F0002"])
+fw4 = watch.FrameWatcher("10.0.0.5", fetch=lambda url: cover.getvalue(), connect=FakeFrame, memory=os.path.join(tempfile.mkdtemp(), "frame.json"))
+fw4.look = {"caption": True, "fields": ["title", "artist"], "align": "center", "size": "medium"}
+fw4.step("http://a/1", now=0, info={"title": "One", "artist": "A", "album": "B"}); first = fs["current"]
+fw4.step("http://a/1", now=3, info={"title": "One", "artist": "A", "album": "B"})
+assert fs["current"] == first                                   # same song: not uploaded again
+fw4.step("http://a/1", now=6, info={"title": "Two", "artist": "A", "album": "B"})
+assert fs["current"] != first and len(fs["pictures"]) == 3      # next song, same album: a new still, the old one gone
+fw4.look = dict(fw4.look, caption=False); fw4.step("http://a/1", now=9, info={"title": "Three", "artist": "A", "album": "B"}); third = fs["current"]
+fw4.step("http://a/1", now=12, info={"title": "Four", "artist": "A", "album": "B"})
+assert fs["current"] == third                                   # caption off: the still is the album's again
 print("frame ok")

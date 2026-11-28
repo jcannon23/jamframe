@@ -63,7 +63,8 @@ class Watcher:
         self.quiet_since = None
         self.grace = GRACE   # seconds of silence before the TV is restored
         self.look = None     # how the still is made: display.look() of the TV's room
-        self.made = None     # the part of self.look the still on the TV was made with
+        self.made = None     # what the still on the TV was made with: see style()
+        self.info = None     # the song's title, artist and album, for the still's caption
 
     def cleanup(self, keep=None):
         """Delete covers we uploaded, including ones a crashed run left behind."""
@@ -71,9 +72,10 @@ class Watcher:
             if p["name"].startswith(PREFIX) and p["name"] != keep:
                 self.tv.call("DELETE", "/api/pictures/" + urllib.parse.quote(p["name"]))
 
-    def step(self, art, now=None):
-        """art: cover URL of the music playing right now, or None."""
+    def step(self, art, now=None, info=None):
+        """art: cover URL of the music playing right now, or None. info: its title, artist and album."""
         now = time.time() if now is None else now
+        self.info = info if art else None
         if art:
             self.quiet_since = None
             if art != self.art or self.style() != self.made:      # a new cover, or the same one restyled
@@ -84,7 +86,17 @@ class Watcher:
                 self.restore()
 
     def style(self):
-        return {k: (self.look or {}).get(k) for k in ("mute", "mat", "cover", "grain", "scale")}
+        """Everything the still depends on: when any of it changes, the still is made again."""
+        look, made = self.look or {}, {}
+        for k in ("mute", "mat", "cover", "grain", "scale", "caption", "align", "fields", "size"):
+            made[k] = look.get(k)
+        if look.get("caption") and self.info:        # a captioned still is the song's, not just the album's
+            made["words"] = {k: self.info.get(k, "") for k in ("title", "artist", "album") if k in (look.get("fields") or [])}
+        return made
+
+    def still(self, art, made):
+        look = {k: v for k, v in made.items() if v is not None and k != "words"}
+        return treat_bytes(self.fetch(art), look, made.get("words"))
 
     def show(self, art):
         state = self.tv.call("GET", "/api/state")
@@ -102,7 +114,7 @@ class Watcher:
             self.tv.call("POST", "/api/settings", {"rotate": False})
         made = self.style()
         name = PREFIX + hashlib.sha1((art + json.dumps(made, sort_keys=True)).encode()).hexdigest()[:10] + ".jpg"
-        self.tv.call("PUT", "/api/pictures/" + name, treat_bytes(self.fetch(art), {k: v for k, v in made.items() if v is not None}))
+        self.tv.call("PUT", "/api/pictures/" + name, self.still(art, made))
         self.made = made
         self.tv.call("POST", "/api/art?picture=" + name)
         self.shown, self.art = name, art
@@ -206,8 +218,7 @@ class FrameWatcher(Watcher):
             if not self.before:
                 self.before = {"picture": tv.get_current().get("content_id")}
             made = self.style()
-            still = treat_bytes(self.fetch(art), {k: v for k, v in made.items() if v is not None})
-            new = tv.upload(still, matte="none", portrait_matte="none", file_type="jpg")    # our mat is in the picture
+            new = tv.upload(self.still(art, made), matte="none", portrait_matte="none", file_type="jpg")    # our mat is in the picture
             self.ours(self.ours() + [new])      # written down before it is shown, in case we stop right here
             tv.select_image(new, show=True)
             self.shown, self.art, self.made = new, art, made
@@ -437,7 +448,7 @@ class Room:
         self.display.update(*(self.held if time.time() - self.heard < mine["grace"] else (None, None)))
         if self.watcher:
             self.watcher.grace, self.watcher.look = mine["grace"], look(mine)
-            self.watcher.step(playing and playing[0])
+            self.watcher.step(playing and playing[0], info=playing and playing[1])
 
     def status(self):
         return {"speaker": bool(self.speaker), "playing": self.display.info if self.display.url else None,
