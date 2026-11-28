@@ -2,7 +2,7 @@
 <h1 align="center">JamFrame</h1>
 <p align="center">Your TV's art mode, showing the record that's playing.</p>
 
-When music plays on a Sonos speaker, the TV in that room shows the album cover as a muted, matted print,
+When music plays in a room, on Sonos or through Control4, the TV in that room shows the album cover as a muted, matted print,
 like the rest of the art on the wall. When the music stops, the TV goes back to what it was showing.
 
 ![A cover as JamFrame shows it: faded, on a paper mat](docs/example.jpg)
@@ -76,10 +76,11 @@ Changes save as you make them and reach the screens within a few seconds.
 | TV size | Each room's TV size in inches; Same real size, so a print is as big on the 85-inch as on the 65-inch |
 | Screen | Brightness, dimming at night, burn-in shift |
 | When the music stops | How long to wait, then black, the last cover (with the time in a corner), or a clock in one of four faces |
+| Control4 | Connect a Control4 system, so its rooms can be followed |
 | Spotify | Connect an account; previous, pause, next and like under the preview |
 | Weather | On or off, place, °F or °C; shown with the clock and the kept cover |
 | Quiet hours | Hours in which nothing is shown |
-| Rooms | Sonos room name and the address of its TV; status of each |
+| Rooms | Room name (Sonos or Control4), its art TV's kind and address; status of each |
 | Never show | Line-in and radio stations |
 | PIN | Optional, for changing settings |
 
@@ -127,6 +128,19 @@ preview clip. It is the song's speed, not the position of each beat: nothing hea
 
 Weather comes from [Open-Meteo](https://open-meteo.com), also free and without an account. It is sent the place
 name you typed, then that place's coordinates.
+
+## Control4 (optional)
+
+For homes where Control4 plays the music. Once connected, a JamFrame room named like a Control4 room follows
+it: the song, artist, album, cover, song length and next track all come from the controller, for Spotify
+Connect and its other streaming sources. Rooms sharing one stream show the same cover.
+
+In **Settings → Home & accounts → Control4**, enter the account's email and password and the controller's
+address on your network. Control4 gives a pass that lasts a day and wants the password to renew it, so both
+are kept in `control4.json` on your computer, readable only by you and never sent to a page.
+
+Sources that carry no song, such as a turntable or a TV, show nothing. Confirmed on a Control4 Core 1 with
+Spotify Connect.
 
 ## Spotify (optional)
 
@@ -179,6 +193,7 @@ fills the screen with no extra mat, the change does not flash, and brightness ma
 | `display/index.html` | A room's screen: mat, cover, caption, lyrics, the changes between covers |
 | `display/settings.html` | The settings page |
 | `spotify.py` | The optional Spotify link |
+| `control4.py` | The optional Control4 link |
 | `tempo.py` | A song's tempo: `python tempo.py "Artist" "Song"` |
 | `treat.py` | Cover in, finished 4K print out: `python treat.py cover.jpg out.jpg` |
 | `check.py` | Checks the lot against a stand-in TV: `python check.py` |

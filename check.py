@@ -456,7 +456,14 @@ class FakeC4(BaseHTTPRequestHandler):
             return self.answer({"error": "Unauthorized"}, 401)
         if self.path == "/api/v1/categories/rooms":
             return self.answer([{"id": 10, "name": "Family Room", "type": 8}, {"id": 11, "name": "Kitchen", "type": 8}, {"id": 99, "name": "A light", "type": 7}])
-        self.answer([{"id": 10, "varName": "CURRENT MEDIA INFO", "value": {"mediainfo": {"title": "Dreams"}}}, {"id": 10, "varName": "PLAYING", "value": 1}])
+        self.answer(C4_VALUES)
+packed = json.dumps({"tracks": [{"track": "8 Days", "artist": "Sharon Jones", "current": True, "duration_ms": 222533, "album_cover_url": "https://i/cover"},
+                                {"track": "Next One", "artist": "Sharon Jones"}]}).replace('"', '\\"')
+C4_VALUES = [{"id": 10, "varName": "POWER_STATE", "value": 1}, {"id": 11, "varName": "POWER_STATE", "value": 0},
+             {"id": 11, "varName": "CURRENT MEDIA INFO", "value": {"$t": ""}},
+             {"id": 10, "varName": "CURRENT MEDIA INFO", "value": {"mediainfo": {
+                 "title": "8 Days", "artist": "Sharon Jones", "album": "Holiday Soul Party", "channel": "", "medSrcDev": 406,
+                 "img": "aHR0cHM6Ly9pLnNjZG4uY28vaW1hZ2UvYWJj", "streamStatus": 'samplerate=44100,status=OK_playing,title="%s"' % packed}}}]
 cloud = HTTPServer(("127.0.0.1", 0), FakeC4)
 threading.Thread(target=cloud.serve_forever, daemon=True).start()
 os.environ["CONTROL4_CLOUD"] = "http://127.0.0.1:%d" % cloud.server_port
@@ -475,7 +482,19 @@ real_get = _requests.get            # the controller is asked over https; the st
 _requests.get = lambda url, **kw: real_get(url.replace("https://10.0.0.9", "http://127.0.0.1:%d" % cloud.server_port), **kw)
 c4.poll()
 _requests.get = real_get
-assert c4.status()["rooms"] == ["Family Room", "Kitchen"] and c4.rooms[10]["PLAYING"] == 1 and c4.rooms[10]["CURRENT MEDIA INFO"]["mediainfo"]["title"] == "Dreams"
+assert c4.status()["rooms"] == ["Family Room", "Kitchen"] and c4.find("Family Room") == 10 and c4.find("Nowhere") is None
+heard = c4.now_playing(10)
+assert heard == {"art": "https://i.scdn.co/image/abc", "info": {"title": "8 Days", "artist": "Sharon Jones", "album": "Holiday Soul Party"},
+                 "duration": 222.533, "station": None, "next": {"title": "Next One", "artist": "Sharon Jones"}}, heard
+assert c4.now_playing(11) is None and c4.now_playing(99) is None
+c4.rooms[10]["CURRENT MEDIA INFO"]["mediainfo"]["streamStatus"] = "status=OK_paused"
+assert c4.now_playing(10) is None
+c4.rooms[10]["CURRENT MEDIA INFO"]["mediainfo"]["streamStatus"] = 'status=OK_playing,title="%s"' % packed
+room = watch.Room("Family Room", None, lambda url: b"jpeg")           # a JamFrame room with no Sonos speaker of that name
+room.c4 = c4.find(room.name)
+room.tick(conf, None, c4)
+st = room.display.page_state()
+assert (st["title"], st["next"], st["duration"]) == ("8 Days", {"title": "Next One", "artist": "Sharon Jones"}, 222.533) and room.status()["speaker"]
 c4.disconnect()
 assert not c4.connected and not os.path.exists(c4path)
 print("control4 ok")

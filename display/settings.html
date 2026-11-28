@@ -95,7 +95,7 @@
   <div id="house">
     <section>
       <h2>Rooms</h2>
-      <p class="note">Sonos room name, exactly as in the Sonos app, and, for an art TV (a Samsung Frame, or a TCL running BetterFrame), its kind and address. Leave the address empty for a TV running the JamFrame TV app or showing the room's page in a browser.</p>
+      <p class="note">Room name, exactly as in the Sonos app (or in Control4, if that is connected), and, for an art TV (a Samsung Frame, or a TCL running BetterFrame), its kind and address. Leave the address empty for a TV running the JamFrame TV app or showing the room's page in a browser.</p>
       <div id="rooms"></div>
       <div class="row"><button id="add">Add room</button></div>
       <datalist id="speakers"></datalist>
@@ -294,7 +294,7 @@ function own() {
 
 function roomRow(name, tv) {
   const link = el('a', { target: '_blank', textContent: 'Open page' });
-  const n = el('input', { type: 'text', value: name, placeholder: 'Sonos room' });
+  const n = el('input', { type: 'text', value: name, placeholder: 'Room name' });
   n.setAttribute('list', 'speakers'); n.dataset.was = name;
   const samsung = (tv || '').startsWith('samsung:');
   const t = el('input', { type: 'text', value: (tv || '').replace(/^samsung:/, ''), placeholder: 'Art TV address, e.g. 192.168.1.50' });
@@ -370,7 +370,7 @@ async function watch() {
   try { state = await (await fetch('status', { cache: 'no-store' })).json(); } catch (e) { state = null; }
   const say = (name, s) => !state ? 'The watcher is not answering.' : !s ? 'Starting…'
     : s.error ? 'Problem: ' + s.error
-    : !s.speaker ? `No Sonos room called “${name}” found yet.`
+    : !s.speaker ? `No Sonos or Control4 room called “${name}” found yet.`
     : (s.playing ? `Playing ${s.playing.title || 'music'}${s.playing.artist ? ' by ' + s.playing.artist : ''}` : 'Nothing playing')
       + (s.tv ? ' · art TV' : s.app ? ' · TV app connected' : '');
   const room = shownRoom();

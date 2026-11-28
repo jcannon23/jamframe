@@ -6,8 +6,10 @@ password. So those are kept, in control4.json beside the code, readable only by 
 The sign-in is Control4's own cloud one (the requests and application key are those the open-source pyControl4
 library found); after that everything is asked of the controller itself, on the home network.
 """
+import base64
 import json
 import os
+import re
 import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -102,6 +104,47 @@ class Control4:
             if v.get("id") in self.rooms:
                 self.rooms[v["id"]][v.get("varName")] = v.get("value")
 
+    def find(self, name):
+        """The id of the room called this that plays music, or None. Control4 projects reuse room names
+        (a "Living Room" for the lights, another for the audio): the one that has media is the one meant."""
+        named = [i for i, r in sorted(self.rooms.items()) if r["name"] == name]
+        return next((i for i in named if "CURRENT MEDIA INFO" in self.rooms[i]), named[0] if named else None)
+
+    def now_playing(self, room_id):
+        """What a room is playing, or None: {"art" (cover address, may be None), "info" (title, artist, album),
+        "duration" (seconds or None), "station" (the channel, on SiriusXM), "next" ({title, artist} or None)}."""
+        room = self.rooms.get(room_id) or {}
+        media = room.get("CURRENT MEDIA INFO")
+        try:
+            media = (json.loads(media) if isinstance(media, str) else media or {}).get("mediainfo") or {}
+        except ValueError:
+            return None
+        if str(room.get("POWER_STATE")) != "1" or not media.get("title"):
+            return None
+        stream = media.get("streamStatus") or ""
+        if "status=" in stream and "status=OK_playing" not in stream:
+            return None                     # paused
+        # Streaming services tuck their own record into the stream's status: this song's length, and the next one
+        tracks = []
+        packed = re.search(r'title="(.*)"', stream, re.S)
+        if packed:
+            try:
+                tracks = json.loads(packed.group(1).replace('\\"', '"')).get("tracks") or []
+            except (ValueError, AttributeError):
+                pass
+        at = next((n for n, t in enumerate(tracks) if t.get("current")), None)
+        now = tracks[at] if at is not None else {}
+        after = tracks[at + 1] if at is not None and at + 1 < len(tracks) else None
+        try:
+            art = base64.b64decode(media.get("img") or "").decode() or None      # the cover's address, base64'd
+        except ValueError:
+            art = None
+        return {"art": art if art and art.startswith("http") else now.get("album_cover_url"),
+                "info": {k: str(media.get(k) or "") for k in ("title", "artist", "album")},
+                "duration": now.get("duration_ms", 0) / 1000 or None, "station": media.get("channel") or None,
+                "next": after and {"title": after.get("track", ""), "artist": after.get("artist", "")}}
+
     def status(self):
         return {"connected": self.connected, "error": self.error, "controller": self.kept.get("controller"),
-                "address": self.kept.get("address"), "rooms": sorted(r["name"] for r in self.rooms.values())}
+                "address": self.kept.get("address"),
+                "rooms": sorted({r["name"] for r in self.rooms.values() if "CURRENT MEDIA INFO" in r})}     # the ones with music

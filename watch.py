@@ -398,6 +398,8 @@ class Room:
     def __init__(self, name, tv_address, fetch):
         self.name, self.tv = name, tv_address
         self.speaker = None      # found later: a speaker may be off, or not bought yet
+        self.c4 = None           # or the Control4 room of this name, when there is no Sonos speaker called it
+        self.ahead = None        # the next song, when the room's source says
         self.display = Display(fetch, room=name)
         self.watcher = (None if not tv_address
                         else FrameWatcher(tv_address[len("samsung:"):], fetch) if tv_address.startswith("samsung:")
@@ -409,13 +411,27 @@ class Room:
         self.beat = None         # the song self.display.tempo was looked up for
         self.began = (None, 0)   # (song, when we first saw it): our own clock for sources that give no position
 
-    def tick(self, conf, spot=None):
-        """conf: all settings. spot: what the linked Spotify account is playing (spotify.Spotify.now), if anything."""
+    def listen(self, conf, control4):
+        """What this room is playing, as now_playing() gives it, from its Sonos speaker or its Control4 room."""
+        if self.speaker:
+            return now_playing(self.speaker, conf["ignore"])
+        found = control4.now_playing(self.c4) if control4 and self.c4 is not None else None
+        if not found:
+            return None
+        info = found["info"]
+        art = found["art"] or find_cover(info["artist"], info["title"], info["album"])
+        self.ahead = found["next"]
+        return art and (art, info, None, found["duration"], found["station"] and (found["station"], ""))
+
+    def tick(self, conf, spot=None, control4=None):
+        """conf: all settings. spot: what the linked Spotify account is playing (spotify.Spotify.now), if anything.
+        control4: the linked control4.Control4, if any."""
         mine = room_settings(conf, self.name)
         if self.watcher and not self.clean:
             self.watcher.cleanup()
             self.clean = True
-        playing = now_playing(self.speaker, conf["ignore"]) if self.speaker else None
+        self.ahead = None
+        playing = self.listen(conf, control4)
         if within(mine["quiet"]):
             playing, self.heard = None, 0
         if playing and playing[1] != self.began[0]:
@@ -431,6 +447,8 @@ class Room:
             self.display.duration, self.display.extra = playing[3], {}
             if playing[4]:               # on radio: the station is where the song comes from
                 self.display.extra = {"source": playing[4][0], "station": {"name": playing[4][0], "logo": playing[4][1]}}
+            if self.ahead:               # Control4 knows the next song without Spotify's help
+                self.display.extra["next"] = self.ahead
             if spot and spot["playing"] and spot["title"].strip().lower() == playing[1]["title"].strip().lower():
                 # the same song: Spotify knows where it is to the millisecond, and what comes after
                 self.display.position = (spot["progress"], spot["at"])
@@ -451,7 +469,7 @@ class Room:
             self.watcher.step(playing and playing[0], info=playing and playing[1])
 
     def status(self):
-        return {"speaker": bool(self.speaker), "playing": self.display.info if self.display.url else None,
+        return {"speaker": bool(self.speaker) or self.c4 is not None, "playing": self.display.info if self.display.url else None,
                 "tv": self.tv, "error": self.error, "app": time.time() - self.display.tv_seen < 15}
 
 
@@ -470,7 +488,9 @@ if __name__ == "__main__":
     from control4 import Control4
     from spotify import Spotify
     spot, c4 = Spotify(), Control4()
-    serve(displays, speakers=speakers, status=lambda: {name: r.status() for name, r in list(rooms.items())},
+    c4_rooms = set()
+    names = type("Names", (), {"__iter__": lambda self: iter(set(speakers) | c4_rooms)})()     # offered on the settings page
+    serve(displays, speakers=names, status=lambda: {name: r.status() for name, r in list(rooms.items())},
           weather=lambda: weather.get("now"), spotify=spot, control4=c4)
     signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))   # so `finally` runs under launchd too
     print("settings at http://localhost:%d/settings" % PORT, flush=True)
@@ -496,7 +516,10 @@ if __name__ == "__main__":
                     displays[name] = rooms[name].display
                     looked = 0
                     print("following:", name, flush=True)
-            if (not speakers or any(not r.speaker for r in rooms.values())) and time.time() - looked > 60:
+            for r in rooms.values():         # a room with no Sonos speaker of its name may be a Control4 room
+                r.c4 = None if r.speaker else c4.find(r.name)
+            c4_rooms.clear(); c4_rooms.update(c4.status()["rooms"])
+            if (not speakers or any(not r.speaker and r.c4 is None for r in rooms.values())) and time.time() - looked > 60:
                 looked = time.time()
                 speakers.update({z.player_name: z for z in soco.discover(timeout=3) or []})
             for r in rooms.values():
@@ -504,7 +527,7 @@ if __name__ == "__main__":
                     r.speaker = speakers[r.name]
                     print("found speaker:", r.name, flush=True)
                 try:
-                    r.tick(conf, spot.now)
+                    r.tick(conf, spot.now, c4)
                     r.error = None
                 except (OSError, soco.exceptions.SoCoException) as e:
                     if str(e) != r.error:    # TV asleep, speaker rebooting, Wi-Fi blip: say it once, keep trying
