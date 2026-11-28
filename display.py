@@ -61,6 +61,8 @@ DEFAULTS = {
     "rooms": {},            # Sonos room name -> its art TV: "192.168.1.50" (TCL with BetterFrame),
                             # "samsung:192.168.1.60" (Samsung Frame), or None
     "overrides": {},        # Sonos room name -> {some LOOK settings}
+    "hears": {},            # room name -> other rooms whose music it shows when it has none of its own:
+                            # {"Living Room": ["Kitchen"]} puts the kitchen's music on the living room TV
     "ignore": [],           # sources that never take a screen: "linein", "radio"
     "pin": "",              # digits; when set, changing settings needs it
     "weather": {"on": False, "place": "", "unit": "F"},   # shown with the clock, and in a corner of a kept cover
@@ -110,6 +112,9 @@ VALID = {
         isinstance(name, str) and isinstance(o, dict) and all(k in LOOK and VALID[k](x) for k, x in o.items())
         for name, o in v.items()),
     "ignore": lambda v: subset(v, ("linein", "radio")),
+    "hears": lambda v: isinstance(v, dict) and all(
+        isinstance(name, str) and isinstance(others, list) and all(isinstance(o, str) and 0 < len(o) <= 64 for o in others)
+        for name, others in v.items()),
     "spotify": lambda v: (isinstance(v, dict) and set(v) == {"client_id"} and isinstance(v["client_id"], str)
                           and re.fullmatch(r"[0-9A-Za-z]{0,64}", v["client_id"])),
     "pin": lambda v: isinstance(v, str) and re.fullmatch(r"\d{0,12}", v),

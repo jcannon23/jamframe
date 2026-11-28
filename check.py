@@ -495,6 +495,20 @@ room.c4 = c4.find(room.name)
 room.tick(conf, None, c4)
 st = room.display.page_state()
 assert (st["title"], st["next"], st["duration"]) == ("8 Days", {"title": "Next One", "artist": "Sharon Jones"}, 222.533) and room.status()["speaker"]
+
+# a room with a screen can also show the music of a room without one: its own first, then theirs
+den = watch.Room("Den", None, lambda url: b"jpeg")                    # no speaker, no Control4 room of its own
+lends = dict(conf, hears={"Den": ["Nowhere", "Family Room"]})
+find = lambda name: (None, c4.find(name))
+den.tick(lends, None, c4, find)
+assert den.display.page_state()["title"] == "8 Days" and den.display.page_state()["next"]["title"] == "Next One"
+den2 = watch.Room("Den", None, lambda url: b"jpeg"); den2.tick(conf, None, c4, find)
+assert den2.display.page_state()["art"] is None                       # without "hears", nothing
+den.speaker = Speaker({"uri": "x-sonos-spotify:1", "title": "Own Song", "artist": "A", "album": "B", "album_art": "http://sonos/own",
+                       "position": "0:00:10", "duration": "0:03:00"})
+den.tick(lends, None, c4, find)
+assert den.display.page_state()["title"] == "Own Song" and den.display.page_state()["next"] is None     # its own music wins
+assert post({"hears": {"Den": ["Family Room"]}}) in (204, 403) and post({"hears": {"Den": "Family Room"}}) in (400, 403)
 c4.disconnect()
 assert not c4.connected and not os.path.exists(c4path)
 print("control4 ok")

@@ -411,27 +411,33 @@ class Room:
         self.beat = None         # the song self.display.tempo was looked up for
         self.began = (None, 0)   # (song, when we first saw it): our own clock for sources that give no position
 
-    def listen(self, conf, control4):
-        """What this room is playing, as now_playing() gives it, from its Sonos speaker or its Control4 room."""
-        if self.speaker:
-            return now_playing(self.speaker, conf["ignore"])
-        found = control4.now_playing(self.c4) if control4 and self.c4 is not None else None
-        if not found:
-            return None
-        info = found["info"]
-        art = found["art"] or find_cover(info["artist"], info["title"], info["album"])
-        self.ahead = found["next"]
-        return art and (art, info, None, found["duration"], found["station"] and (found["station"], ""))
+    def listen(self, conf, control4, find=None):
+        """What this room should show, as now_playing() gives it: its own music, from its Sonos speaker or its
+        Control4 room; failing that, the music of the rooms it also hears (settings' "hears"), in order.
+        find: room name -> (Sonos speaker or None, Control4 room id or None), for those other rooms."""
+        sources = [(self.speaker, self.c4)] + [find(name) for name in conf["hears"].get(self.name, []) if find]
+        for speaker, room_id in sources:
+            self.ahead = None
+            if speaker:
+                playing = now_playing(speaker, conf["ignore"])
+            else:
+                found = control4.now_playing(room_id) if control4 and room_id is not None else None
+                info = found and found["info"]
+                art = found and (found["art"] or find_cover(info["artist"], info["title"], info["album"]))
+                playing = art and (art, info, None, found["duration"], found["station"] and (found["station"], ""))
+                self.ahead = playing and found["next"]
+            if playing:
+                return playing
+        return None
 
-    def tick(self, conf, spot=None, control4=None):
+    def tick(self, conf, spot=None, control4=None, find=None):
         """conf: all settings. spot: what the linked Spotify account is playing (spotify.Spotify.now), if anything.
-        control4: the linked control4.Control4, if any."""
+        control4: the linked control4.Control4, if any. find: see listen()."""
         mine = room_settings(conf, self.name)
         if self.watcher and not self.clean:
             self.watcher.cleanup()
             self.clean = True
-        self.ahead = None
-        playing = self.listen(conf, control4)
+        playing = self.listen(conf, control4, find)
         if within(mine["quiet"]):
             playing, self.heard = None, 0
         if playing and playing[1] != self.began[0]:
@@ -527,7 +533,7 @@ if __name__ == "__main__":
                     r.speaker = speakers[r.name]
                     print("found speaker:", r.name, flush=True)
                 try:
-                    r.tick(conf, spot.now, c4)
+                    r.tick(conf, spot.now, c4, lambda name: (speakers.get(name), c4.find(name)))
                     r.error = None
                 except (OSError, soco.exceptions.SoCoException) as e:
                     if str(e) != r.error:    # TV asleep, speaker rebooting, Wi-Fi blip: say it once, keep trying

@@ -299,25 +299,30 @@ function roomRow(name, tv) {
   const samsung = (tv || '').startsWith('samsung:');
   const t = el('input', { type: 'text', value: (tv || '').replace(/^samsung:/, ''), placeholder: 'Art TV address, e.g. 192.168.1.50' });
   const kind = el('select', {}, el('option', { value: '', textContent: 'TCL art TV (BetterFrame)' }), el('option', { value: 'samsung:', textContent: 'Samsung Frame', selected: samsung }));
+  const also = el('input', { type: 'text', value: ((conf.hears || {})[name] || []).join(', '), placeholder: 'Also show music from… (rooms without a screen, e.g. Kitchen)' });
+  also.setAttribute('list', 'speakers'); also.className = 'also';
   const row = el('div', { className: 'room' },
     el('div', {}, n, kind, t, link, el('button', { textContent: 'Remove', onclick: () => { row.remove(); rooms(); } })),
+    el('div', { style: 'margin-top: 8px' }, also),
     el('div', { className: 'note' }));
   const point = () => { link.href = './?room=' + encodeURIComponent(n.value.trim()); link.hidden = !n.value.trim(); };
-  n.oninput = point; n.onchange = t.onchange = kind.onchange = rooms; point();
+  n.oninput = point; n.onchange = t.onchange = kind.onchange = also.onchange = rooms; point();
   return row;
 }
 
 // Rooms as the rows have them now. A renamed room keeps its own settings.
 function rooms() {
-  const list = {}, overrides = {};
+  const list = {}, overrides = {}, hears = {};
   for (const row of $('rooms').children) {
     const [n, t] = row.querySelectorAll('input'), name = n.value.trim();
     if (!name) continue;
+    const others = row.querySelector('.also').value.split(',').map(x => x.trim()).filter(x => x && x !== name);
+    if (others.length) hears[name] = others;
     list[name] = t.value.trim() ? row.querySelector('select').value + t.value.trim() : null;
     if (conf.overrides[n.dataset.was]) overrides[name] = conf.overrides[n.dataset.was];
     n.dataset.was = name;
   }
-  conf.rooms = list; conf.overrides = overrides;
+  conf.rooms = list; conf.overrides = overrides; conf.hears = hears;
   render(); save(true);
 }
 
