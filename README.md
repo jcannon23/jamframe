@@ -194,6 +194,7 @@ fills the screen with no extra mat, the change does not flash, and brightness ma
 | `display/settings.html` | The settings page |
 | `spotify.py` | The optional Spotify link |
 | `control4.py` | The optional Control4 link |
+| `c4audio.py` | Listens to a Control4 room's audio over the network, for recognising records. Experimental: see `docs/control4-audio-notes.md` |
 | `tempo.py` | A song's tempo: `python tempo.py "Artist" "Song"` |
 | `treat.py` | Cover in, finished 4K print out: `python treat.py cover.jpg out.jpg` |
 | `check.py` | Checks the lot against a stand-in TV: `python check.py` |

@@ -512,3 +512,30 @@ assert post({"hears": {"Den": ["Family Room"]}}) in (204, 403) and post({"hears"
 c4.disconnect()
 assert not c4.connected and not os.path.exists(c4path)
 print("control4 ok")
+
+# listening to Control4's network audio: the handshake a server expects, and packets put back into a FLAC file
+import c4audio
+a_side, b_side = socket.socketpair() if (socket := __import__("socket")) else (None, None)
+threading.Thread(target=c4audio.answer, args=(b_side,), daemon=True).start()
+a_side.sendall(b'1 PING\n2 session "session_cmd, cmd=(int)0, port=(int)6200;"\n')
+a_side.settimeout(2); got = b""
+while got.count(b"\n") < 3:
+    got += a_side.recv(200)
+assert got == b"1 OK PING\r\n2 session session_reply;\r\n2 OK session\r\n", got      # without the middle line the stream dies
+a_side.close()
+frame1, frame2 = b"\xff\xf8\x5a\x8c" + bytes(range(200)) * 12, b"\xff\xf8\x5a\x8c" + b"\x07" * 900
+def pieces(frame, stamp, seq):
+    body, out, offset = b"\x00" * 8 + frame, [], 0          # a frame's first piece starts with 8 bytes that are not part of it
+    for n, start in enumerate(range(0, len(body), 1360)):
+        piece = body[start:start + 1360]
+        out.append(struct.pack("!BBHII", 0x80, 96, seq + n, stamp, 1) + struct.pack("!II", 0, offset) + piece)
+        offset += len(piece) - (8 if n == 0 else 0)
+    return out
+import struct
+sent = pieces(frame1, 1000, 1) + pieces(frame2, 9640, 3)
+made = c4audio.flac(list(reversed(sent[:2])) + sent[2:])           # pieces may arrive out of order
+assert made[:4] == b"fLaC" and made[42:] == frame1 + frame2 and len(made) == 42 + len(frame1) + len(frame2)
+rate_bits = struct.unpack(">Q", made[18:26])[0]
+assert rate_bits >> 44 == 48000 and (rate_bits >> 36) & 31 == 23 and (rate_bits >> 41) & 7 == 1      # 48 kHz, 24-bit, stereo
+assert c4audio.flac([]) == b"" and c4audio.flac(sent[1:2]) == b""  # nothing whole: nothing
+print("c4audio ok")
