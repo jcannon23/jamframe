@@ -43,15 +43,18 @@ Nothing below can be done until a TV is on the same network as the computer runn
 - **Backlight**: the page dims the picture, not the panel. See whether the QM6K's own picture settings or
   light sensor are enough.
 
-## The two art TVs (65A400U, 75A300L)
+## The art TV (75A300L)
 
-These take the other route: BetterFrame's art mode, installed by `scripts/install-betterframe.sh`, with the
+This one takes the other route: BetterFrame's art mode, installed by `scripts/install-betterframe.sh`, with the
 TV's address entered on the room's row. Also never run on a real TV. Before installing:
 
-1. Same debugging steps as above, per TV.
-2. Confirm the 75's exact model on its label: no "75A300L" turned up in searches, only 75A300W.
-3. BetterFrame was only tested by its author on the A400 Pro. Its backlight control uses a TCL-internal
-   service that may differ per model: check it on each TV before relying on it.
+1. Same debugging steps as above.
+2. Confirm the exact model on its label: no "75A300L" turned up in searches, only 75A300W.
+3. BetterFrame was only tested by its author on the A400 Pro, a different series. Its backlight control uses a
+   TCL-internal service that may differ on the A300: check it before relying on it. This is the least certain
+   part of the whole setup.
 4. BetterFrame has no license. We install it unmodified from its own repository and copy none of its code.
+5. Through BetterFrame the TV shows a still of the cover: no caption, lyrics, waves or animated changes.
 
-If BetterFrame does not work on one of them, the JamFrame TV app is the fallback for that TV too.
+If BetterFrame does not work on it, or the still is not enough, the JamFrame TV app is the fallback: the same
+install as the 85QM6K, and the full animated screen.
